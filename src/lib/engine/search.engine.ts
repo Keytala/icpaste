@@ -1,16 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Search Engine (Core)
-//  Orchestrates all adapters, optimizes qty, picks the best deal.
+//  icpaste.com — Search Engine v2
+//  Handles both MPN and distributor order codes transparently.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { distributors }          from "../adapters";
-import { optimizeQty }           from "./qty.optimizer";
-import { getBestUnitPrice, getTotalPrice } from "./price.calculator";
-import { BomRow, OptimizedResult, SearchResponse } from "../types";
+import { distributors }                        from "../adapters";
+import { optimizeQty }                         from "./qty.optimizer";
+import { getBestUnitPrice, getTotalPrice }     from "./price.calculator";
+import { BomRow }                              from "../utils/bom-parser";
+import { resolveDistributorCode }              from "../utils/code-resolver";
+import { OptimizedResult, SearchResponse }     from "../types";
 
 export async function searchBom(bom: BomRow[]): Promise<SearchResponse> {
   const results: OptimizedResult[] = await Promise.all(
-    bom.map(row => searchSingleMpn(row.mpn, row.qty))
+    bom.map(row => searchSingleRow(row))
   );
 
   const totalBom = parseFloat(
@@ -25,79 +27,93 @@ export async function searchBom(bom: BomRow[]): Promise<SearchResponse> {
   };
 }
 
-async function searchSingleMpn(mpn: string, requestedQty: number): Promise<OptimizedResult> {
-  // Query all distributors in parallel
+async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
+  const { rawCode, qty, detection } = row;
+
+  // ── Step 1: resolve distributor code → MPN if needed ─────────────────────
+  let mpn         = rawCode;
+  let description = "";
+  let resolvedNote: string | undefined;
+
+  if (detection.isDistributorCode) {
+    const resolved = await resolveDistributorCode(rawCode, detection.detectedAs);
+    mpn         = resolved.mpn;
+    description = resolved.description;
+
+    if (resolved.wasResolved) {
+      resolvedNote = `Resolved from ${detection.detectedAs} code "${rawCode}"`;
+    }
+    // If resolution failed, mpn === rawCode → adapters will try a keyword search
+  }
+
+  // ── Step 2: query all distributors in parallel ────────────────────────────
   const allResults = (
-    await Promise.all(distributors.map(d => d.search(mpn, requestedQty)))
+    await Promise.all(distributors.map(d => d.search(mpn, qty)))
   ).flat();
 
   if (allResults.length === 0) {
     return {
       mpn,
-      description:  "",
-      requestedQty,
-      optimalQty:   requestedQty,
-      rounded:      false,
-      unitPrice:    0,
-      totalPrice:   0,
-      currency:     "USD",
-      distributor:  "—",
-      stock:        0,
-      productUrl:   "",
-      error:        "No results found across all distributors",
+      originalCode:  detection.isDistributorCode ? rawCode : undefined,
+      description,
+      requestedQty:  qty,
+      optimalQty:    qty,
+      rounded:       false,
+      unitPrice:     0,
+      totalPrice:    0,
+      currency:      "USD",
+      distributor:   "—",
+      stock:         0,
+      productUrl:    "",
+      resolvedNote,
+      error:         "No results found across all distributors",
     };
   }
 
-  // For each result, compute optimal qty and real total price
+  // ── Step 3: compute optimal qty and real price for each candidate ─────────
   const candidates = allResults
     .map(part => {
-      const { optimalQty, rounded, feasible } = optimizeQty(
-        requestedQty,
-        part.packageUnit,
-        part.stock
-      );
-
-      if (!feasible) return null; // skip if not enough stock
-
-      const unitPrice  = getBestUnitPrice(part.priceTiers, optimalQty);
-      const totalPrice = getTotalPrice(part.priceTiers, optimalQty);
+      const { optimalQty, rounded, feasible } = optimizeQty(qty, part.packageUnit, part.stock);
+      if (!feasible) return null;
 
       return {
-        mpn:          part.mpn,
-        description:  part.description,
-        requestedQty,
+        mpn:           part.mpn,
+        originalCode:  detection.isDistributorCode ? rawCode : undefined,
+        description:   description || part.description,
+        requestedQty:  qty,
         optimalQty,
         rounded,
-        unitPrice,
-        totalPrice,
-        currency:     part.currency,
-        distributor:  part.distributor,
-        stock:        part.stock,
-        productUrl:   part.productUrl,
+        unitPrice:     getBestUnitPrice(part.priceTiers, optimalQty),
+        totalPrice:    getTotalPrice(part.priceTiers, optimalQty),
+        currency:      part.currency,
+        distributor:   part.distributor,
+        stock:         part.stock,
+        productUrl:    part.productUrl,
+        resolvedNote,
       } as OptimizedResult;
     })
     .filter((c): c is OptimizedResult => c !== null);
 
   if (candidates.length === 0) {
-    // All distributors have insufficient stock — return best available anyway
     const fallback = allResults.sort((a, b) => b.stock - a.stock)[0];
     return {
       mpn,
-      description:  fallback.description,
-      requestedQty,
-      optimalQty:   requestedQty,
-      rounded:      false,
-      unitPrice:    getBestUnitPrice(fallback.priceTiers, requestedQty),
-      totalPrice:   getTotalPrice(fallback.priceTiers, requestedQty),
-      currency:     fallback.currency,
-      distributor:  fallback.distributor,
-      stock:        fallback.stock,
-      productUrl:   fallback.productUrl,
-      error:        "Insufficient stock — showing best available",
+      originalCode:  detection.isDistributorCode ? rawCode : undefined,
+      description:   description || fallback.description,
+      requestedQty:  qty,
+      optimalQty:    qty,
+      rounded:       false,
+      unitPrice:     getBestUnitPrice(fallback.priceTiers, qty),
+      totalPrice:    getTotalPrice(fallback.priceTiers, qty),
+      currency:      fallback.currency,
+      distributor:   fallback.distributor,
+      stock:         fallback.stock,
+      productUrl:    fallback.productUrl,
+      resolvedNote,
+      error:         "Insufficient stock — showing best available",
     };
   }
 
-  // Sort by totalPrice ascending → pick the winner
   candidates.sort((a, b) => a.totalPrice - b.totalPrice);
   return candidates[0];
 }
