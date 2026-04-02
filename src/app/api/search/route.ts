@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
 
     let bom: BomRow[] = [];
 
-    // Accept either raw text (paste) or pre-parsed array
     if (typeof body.raw === "string") {
       bom = parseBom(body.raw);
     } else if (Array.isArray(body.bom)) {
@@ -28,9 +27,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (bom.length > 100) {
+    // ── Limite alzato a 1000 ──────────────────────────────────────────────────
+    if (bom.length > 1000) {
       return NextResponse.json(
-        { error: "Maximum 100 components per search." },
+        { error: "Maximum 1000 components per search." },
         { status: 400 }
       );
     }
