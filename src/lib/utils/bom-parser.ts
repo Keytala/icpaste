@@ -1,15 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — BOM Parser
-//  Parses raw text input (paste or CSV) into BomRow[]
+//  icpaste.com — BOM Parser (v2 — with distributor code detection)
 //
-//  Supported formats:
-//  1. "MPN QTY" per line  →  LM358N 100
-//  2. "MPN,QTY" CSV       →  LM358N,100
-//  3. "MPN;QTY" CSV       →  LM358N;100
-//  4. Tab-separated       →  LM358N\t100
+//  Parses raw text input and, for each row, detects whether the code
+//  is a distributor order code or an MPN. Resolution happens later
+//  in the search engine (async, server-side).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { BomRow } from "../types";
+import { detectCodeType, CodeDetectionResult } from "./code-detector";
+
+export interface BomRow {
+  rawCode:    string;                  // exactly as typed by the user
+  qty:        number;
+  detection:  CodeDetectionResult;     // pre-computed detection metadata
+}
 
 export function parseBom(raw: string): BomRow[] {
   const lines = raw
@@ -20,24 +23,30 @@ export function parseBom(raw: string): BomRow[] {
   const rows: BomRow[] = [];
 
   for (const line of lines) {
-    // Try splitting by common delimiters
     const parts = line.split(/[\t,;]+|\s{2,}|\s(?=\d)/).map(p => p.trim());
-
     if (parts.length < 2) continue;
 
-    const mpn = parts[0].toUpperCase();
-    const qty = parseInt(parts[1].replace(/[^0-9]/g, ""), 10);
+    const rawCode = parts[0].toUpperCase();
+    const qty     = parseInt(parts[1].replace(/[^0-9]/g, ""), 10);
 
-    if (!mpn || isNaN(qty) || qty <= 0) continue;
+    if (!rawCode || isNaN(qty) || qty <= 0) continue;
 
-    rows.push({ mpn, qty });
+    rows.push({
+      rawCode,
+      qty,
+      detection: detectCodeType(rawCode),
+    });
   }
 
-  // Deduplicate: if same MPN appears twice, sum quantities
-  const map = new Map<string, number>();
+  // Deduplicate by rawCode, summing quantities
+  const map = new Map<string, BomRow>();
   for (const row of rows) {
-    map.set(row.mpn, (map.get(row.mpn) ?? 0) + row.qty);
+    if (map.has(row.rawCode)) {
+      map.get(row.rawCode)!.qty += row.qty;
+    } else {
+      map.set(row.rawCode, { ...row });
+    }
   }
 
-  return Array.from(map.entries()).map(([mpn, qty]) => ({ mpn, qty }));
+  return Array.from(map.values());
 }
