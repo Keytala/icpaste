@@ -3,5 +3,8 @@
   "buildCommand": "next build",
   "devCommand": "next dev",
   "installCommand": "npm install",
-  "regions": ["fra1"]
+  "regions": ["fra1"],
+  "engines": {
+    "node": "24.x"
+  }
 }
