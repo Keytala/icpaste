@@ -3,14 +3,5 @@
   "buildCommand": "next build",
   "devCommand": "next dev",
   "installCommand": "npm install",
-  "regions": ["fra1"],
-  "env": {
-    "MOUSER_API_KEY":          "@mouser_api_key",
-    "DIGIKEY_CLIENT_ID":       "@digikey_client_id",
-    "DIGIKEY_CLIENT_SECRET":   "@digikey_client_secret",
-    "FARNELL_API_KEY":         "@farnell_api_key",
-    "MOUSER_AFFILIATE_PARAM":  "@mouser_affiliate_param",
-    "DIGIKEY_AFFILIATE_PARAM": "@digikey_affiliate_param",
-    "FARNELL_AFFILIATE_PARAM": "@farnell_affiliate_param"
-  }
+  "regions": ["fra1"]
 }
