@@ -1,8 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Search Engine v3
-//  - Finds cheapest option
-//  - If cheapest has no stock → marks error + populates stockFallback
-//    with the next cheapest option that HAS stock
+//  icpaste.com — Search Engine v4
+//
+//  Logic:
+//  1. Find ALL candidates (with and without stock)
+//  2. Sort by price ascending
+//  3. If cheapest has stock → winner, done
+//  4. If cheapest has NO stock:
+//     → show it as winner (with error "out of stock")
+//     → populate stockFallback with cheapest candidate THAT HAS stock
+//     → UI shows "Resolve" button to swap to fallback instantly
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { distributors }                       from "../adapters";
@@ -10,7 +16,12 @@ import { optimizeQty }                        from "./qty.optimizer";
 import { getBestUnitPrice, getTotalPrice }    from "./price.calculator";
 import { BomRow }                             from "../utils/bom-parser";
 import { resolveDistributorCode }             from "../utils/code-resolver";
-import { OptimizedResult, SearchResponse, StockFallback } from "../types";
+import {
+  OptimizedResult,
+  SearchResponse,
+  StockFallback,
+  PartResult,
+} from "../types";
 
 export async function searchBom(bom: BomRow[]): Promise<SearchResponse> {
   const results: OptimizedResult[] = await Promise.all(
@@ -32,7 +43,7 @@ export async function searchBom(bom: BomRow[]): Promise<SearchResponse> {
 async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
   const { rawCode, qty, detection } = row;
 
-  // ── Step 1: resolve distributor code → MPN ────────────────────────────────
+  // ── Resolve distributor code → MPN ───────────────────────────────────────
   let mpn         = rawCode;
   let description = "";
   let resolvedNote: string | undefined;
@@ -46,39 +57,43 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
     }
   }
 
-  // ── Step 2: query all distributors in parallel ────────────────────────────
+  // ── Query all distributors ────────────────────────────────────────────────
   const allResults = (
     await Promise.all(distributors.map(d => d.search(mpn, qty)))
   ).flat();
 
   if (allResults.length === 0) {
-    return noResult(mpn, rawCode, qty, description, resolvedNote, "No results found across all distributors");
+    return noResult(mpn, rawCode, qty, description, resolvedNote,
+      "No results found across all distributors");
   }
 
-  // ── Step 3: build candidates with optimal qty + real price ────────────────
-  type Candidate = OptimizedResult & { _hasStock: boolean };
+  // ── Build scored candidates ───────────────────────────────────────────────
+  interface Candidate {
+    result:    OptimizedResult;
+    hasStock:  boolean;
+    totalPrice: number;
+  }
 
   const candidates: Candidate[] = allResults
-    .map(part => {
-      const { optimalQty, rounded, feasible } = optimizeQty(qty, part.packageUnit, part.stock);
-      const hasStock = feasible;
+    .map((part: PartResult) => {
+      const { optimalQty, rounded, feasible } = optimizeQty(
+        qty, part.packageUnit, part.stock
+      );
 
-      // Even if no stock, keep it as a candidate (marked _hasStock=false)
-      // so we can still show it as a "cheapest but no stock" option
-      const effectiveQty = hasStock ? optimalQty : qty;
-
-      const unitPrice  = getBestUnitPrice(part.priceTiers, effectiveQty);
-      const totalPrice = getTotalPrice(part.priceTiers, effectiveQty);
+      // Use requested qty for pricing if no stock (for comparison purposes)
+      const effectiveQty = feasible ? optimalQty : qty;
+      const unitPrice    = getBestUnitPrice(part.priceTiers, effectiveQty);
+      const totalPrice   = getTotalPrice(part.priceTiers, effectiveQty);
 
       if (unitPrice === 0) return null;
 
-      return {
+      const result: OptimizedResult = {
         mpn:          part.mpn,
         originalCode: detection.isDistributorCode ? rawCode : undefined,
         description:  description || part.description,
         requestedQty: qty,
         optimalQty:   effectiveQty,
-        rounded,
+        rounded:      feasible ? rounded : false,
         unitPrice,
         totalPrice,
         currency:     part.currency,
@@ -86,44 +101,71 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
         stock:        part.stock,
         productUrl:   part.productUrl,
         resolvedNote,
-        _hasStock:    hasStock,
-      } as Candidate;
+      };
+
+      return { result, hasStock: feasible, totalPrice };
     })
     .filter((c): c is Candidate => c !== null);
 
   if (candidates.length === 0) {
-    return noResult(mpn, rawCode, qty, description, resolvedNote, "No pricing data available");
+    return noResult(mpn, rawCode, qty, description, resolvedNote,
+      "No pricing data available");
   }
 
-  // ── Step 4: sort all candidates by totalPrice ascending ───────────────────
+  // ── Sort by price ─────────────────────────────────────────────────────────
   candidates.sort((a, b) => a.totalPrice - b.totalPrice);
 
-  const withStock    = candidates.filter(c => c._hasStock);
-  const withoutStock = candidates.filter(c => !c._hasStock);
+  const withStock    = candidates.filter(c => c.hasStock);
+  const withoutStock = candidates.filter(c => !c.hasStock);
 
-  // ── Step 5: pick winner ───────────────────────────────────────────────────
-  // Case A: cheapest has stock → perfect, return it
+  // ── Case A: cheapest has stock → perfect ─────────────────────────────────
   if (withStock.length > 0) {
-    const winner = withStock[0];
-    const { _hasStock, ...result } = winner;
-    return result;
+    return withStock[0].result;
   }
 
-  // Case B: nothing has stock → return cheapest (no stock) + stockFallback=undefined
-  // This triggers the "Not found" state with no fallback
-  if (withoutStock.length > 0) {
-    const cheapest = withoutStock[0];
-    const { _hasStock, ...result } = cheapest;
-    return {
-      ...result,
-      error: "Out of stock on all distributors",
+  // ── Case B: nothing has enough stock ─────────────────────────────────────
+  // Show cheapest (no stock) as the main result
+  // Populate stockFallback with cheapest option that has ANY stock
+  const cheapest = withoutStock[0].result;
+
+  // Find fallback: best price among those with partial stock
+  const partialStock = allResults
+    .filter(p => p.stock > 0)
+    .map(part => {
+      const { optimalQty, rounded } = optimizeQty(qty, part.packageUnit, part.stock);
+      // Use whatever stock is available (even if less than requested)
+      const effectiveQty = Math.min(optimalQty, part.stock);
+      const unitPrice    = getBestUnitPrice(part.priceTiers, effectiveQty);
+      const totalPrice   = getTotalPrice(part.priceTiers, effectiveQty);
+      if (unitPrice === 0) return null;
+      return { part, effectiveQty, rounded, unitPrice, totalPrice };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a!.totalPrice - b!.totalPrice);
+
+  let stockFallback: StockFallback | undefined;
+
+  if (partialStock.length > 0) {
+    const fb = partialStock[0]!;
+    stockFallback = {
+      distributor: fb.part.distributor,
+      optimalQty:  fb.effectiveQty,
+      rounded:     fb.rounded,
+      unitPrice:   fb.unitPrice,
+      totalPrice:  fb.totalPrice,
+      currency:    fb.part.currency,
+      stock:       fb.part.stock,
+      productUrl:  fb.part.productUrl,
     };
   }
 
-  return noResult(mpn, rawCode, qty, description, resolvedNote, "No results found");
+  return {
+    ...cheapest,
+    error:         "Out of stock",
+    stockFallback,
+  };
 }
 
-// ── Helper ────────────────────────────────────────────────────────────────────
 function noResult(
   mpn: string,
   rawCode: string,
