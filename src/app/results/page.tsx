@@ -15,80 +15,105 @@ const DIST: Record<string, { bg: string; color: string; border: string; dot: str
   "Farnell (Mock)":  { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", dot: "#22c55e" },
 };
 
-function distStyle(name: string) {
+function ds(name: string) {
   return DIST[name] ?? { bg: "#f9fafb", color: "#374151", border: "#e5e7eb", dot: "#9ca3af" };
 }
 
 // ── Result Row ────────────────────────────────────────────────────────────────
-function ResultRow({ r }: { r: OptimizedResult }) {
-  const hasError    = Boolean(r.error);
-  const wasResolved = Boolean(r.originalCode && r.originalCode !== r.mpn);
-  const ds          = distStyle(r.distributor);
+function ResultRow({
+  r,
+  onResolve,
+}: {
+  r: OptimizedResult;
+  onResolve: (mpn: string) => void;
+}) {
+  const isOutOfStock = r.error === "Out of stock";
+  const isNotFound   = r.error && r.error !== "Out of stock";
+  const wasResolved  = Boolean(r.originalCode && r.originalCode !== r.mpn);
+  const style        = ds(r.distributor);
+  const hasFallback  = Boolean(r.stockFallback);
 
   return (
-    <tr className={s.tr}>
+    <tr className={s.tr} style={isOutOfStock ? { background: "#fffbeb" } : undefined}>
 
       {/* MPN */}
       <td className={s.td}>
         <div className={s.mpn}>{r.mpn}</div>
         {wasResolved && (
-          <div>
-            <span className={s.resolvedBadge}>↑ {r.originalCode}</span>
-          </div>
+          <span className={s.resolvedBadge}>↑ {r.originalCode}</span>
         )}
       </td>
 
       {/* Description */}
-      <td className={`${s.td} ${s.desc}`} style={{ maxWidth: 200 }}>
-        <span style={{
-          display: "block",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}>
+      <td className={`${s.td} ${s.desc}`} style={{ maxWidth: 180 }}>
+        <span style={{ display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
           {r.description || "—"}
         </span>
       </td>
 
       {/* Requested */}
       <td className={`${s.td} ${s.tdRight}`}>
-        <span style={{ color: "var(--text-2)", fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ color:"var(--text-2)", fontVariantNumeric:"tabular-nums" }}>
           {r.requestedQty.toLocaleString()}
         </span>
       </td>
 
       {/* Buy qty */}
       <td className={`${s.td} ${s.tdRight}`}>
-        <span className={r.rounded ? s.qtyAdjusted : s.qtyNormal}
-          style={{ fontVariantNumeric: "tabular-nums" }}>
-          {r.optimalQty.toLocaleString()}
-        </span>
-        {r.rounded && <span className={s.adjBadge}>ADJ</span>}
+        {isNotFound ? "—" : (
+          <>
+            <span className={r.rounded ? s.qtyAdjusted : s.qtyNormal}
+              style={{ fontVariantNumeric:"tabular-nums" }}>
+              {r.optimalQty.toLocaleString()}
+            </span>
+            {r.rounded && <span className={s.adjBadge}>ADJ</span>}
+          </>
+        )}
       </td>
 
       {/* Unit price */}
       <td className={`${s.td} ${s.tdRight} ${s.priceUnit}`}>
-        <span style={{ fontVariantNumeric: "tabular-nums" }}>
-          {hasError ? "—" : `${r.currency} ${r.unitPrice.toFixed(4)}`}
+        <span style={{ fontVariantNumeric:"tabular-nums" }}>
+          {isNotFound ? "—" : `${r.currency} ${r.unitPrice.toFixed(4)}`}
         </span>
       </td>
 
       {/* Total */}
       <td className={`${s.td} ${s.tdRight} ${s.priceTotal}`}>
-        <span style={{ fontVariantNumeric: "tabular-nums" }}>
-          {hasError ? "—" : `${r.currency} ${r.totalPrice.toFixed(2)}`}
+        <span style={{ fontVariantNumeric:"tabular-nums" }}>
+          {isNotFound ? "—" : `${r.currency} ${r.totalPrice.toFixed(2)}`}
         </span>
       </td>
 
-      {/* Best deal */}
+      {/* Best deal / status */}
       <td className={`${s.td} ${s.tdRight}`}>
-        {hasError ? (
+        {isNotFound ? (
+          // ── Not found on any distributor ──
           <span className={s.notFound}>Not found</span>
+
+        ) : isOutOfStock ? (
+          // ── Out of stock: show warning + optional Resolve button ──
+          <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"flex-end", flexWrap:"wrap" }}>
+            <span className={s.outOfStock}>
+              ⚠ Out of stock
+            </span>
+            {hasFallback && (
+              <button
+                className={s.btnResolve}
+                onClick={() => onResolve(r.mpn)}
+                title={`Switch to ${r.stockFallback!.distributor} — ${r.stockFallback!.stock} in stock @ ${r.stockFallback!.currency} ${r.stockFallback!.unitPrice.toFixed(4)}/pz`}
+              >
+                Resolve ↗
+              </button>
+            )}
+          </div>
+
         ) : (
+          // ── Normal: distributor link ──
           <a href={r.productUrl} target="_blank" rel="noopener noreferrer"
             className={s.distLink}
-            style={{ background: ds.bg, color: ds.color, borderColor: ds.border }}>
-            <span className={s.distDot} style={{ background: ds.dot }} />
+            style={{ background:style.bg, color:style.color, borderColor:style.border }}>
+            <span className={s.distDot} style={{ background:style.dot }} />
             {r.distributor}
             <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
@@ -117,9 +142,9 @@ function ResultsContent() {
     catch { router.push("/"); return; }
 
     fetch("/api/search", {
-      method: "POST",
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bom }),
+      body:    JSON.stringify({ bom }),
     })
       .then(r => r.json())
       .then(json => {
@@ -130,15 +155,47 @@ function ResultsContent() {
       .finally(() => setLoading(false));
   }, [params, router]);
 
+  // ── Resolve handler: swap out-of-stock row with its stockFallback ─────────
+  function handleResolve(mpn: string) {
+    if (!data) return;
+
+    const updatedResults = data.results.map(r => {
+      if (r.mpn !== mpn || !r.stockFallback) return r;
+
+      const fb = r.stockFallback;
+      const style = ds(fb.distributor);
+
+      // Swap the row with the fallback data
+      return {
+        ...r,
+        distributor:   fb.distributor,
+        optimalQty:    fb.optimalQty,
+        rounded:       fb.rounded,
+        unitPrice:     fb.unitPrice,
+        totalPrice:    fb.totalPrice,
+        currency:      fb.currency,
+        stock:         fb.stock,
+        productUrl:    fb.productUrl,
+        error:         undefined,       // clear error
+        stockFallback: undefined,       // clear fallback
+      } as OptimizedResult;
+    });
+
+    const newTotal = parseFloat(
+      updatedResults.reduce((sum, r) => sum + (r.totalPrice ?? 0), 0).toFixed(2)
+    );
+
+    setData({ ...data, results: updatedResults, totalBom: newTotal });
+  }
+
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className={s.loading}>
         <div className={s.loadingPills}>
           {["Mouser", "Digi-Key", "Farnell"].map((d, i) => (
-            <div key={d} className={s.loadingPill}
-              style={{ animationDelay: `${i * 150}ms` }}>
-              <span className={s.loadingDot}
-                style={{ animationDelay: `${i * 200}ms` }} />
+            <div key={d} className={s.loadingPill} style={{ animationDelay:`${i*150}ms` }}>
+              <span className={s.loadingDot} style={{ animationDelay:`${i*200}ms` }} />
               {d}
             </div>
           ))}
@@ -151,7 +208,7 @@ function ResultsContent() {
   if (apiError) {
     return (
       <div className={s.loading}>
-        <p style={{ color: "var(--red)", fontFamily: "Inter, sans-serif" }}>{apiError}</p>
+        <p style={{ color:"var(--red)", fontFamily:"Inter, sans-serif" }}>{apiError}</p>
         <button className={s.btnBack} onClick={() => router.push("/")}>← Back</button>
       </div>
     );
@@ -159,9 +216,10 @@ function ResultsContent() {
 
   if (!data) return null;
 
-  const found    = data.results.filter(r => !r.error);
-  const notFound = data.results.filter(r => r.error);
-  const resolved = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
+  const found      = data.results.filter(r => !r.error);
+  const outOfStock = data.results.filter(r => r.error === "Out of stock");
+  const notFound   = data.results.filter(r => r.error && r.error !== "Out of stock");
+  const resolved   = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
 
   const distCount = found.reduce((acc, r) => {
     acc[r.distributor] = (acc[r.distributor] ?? 0) + 1;
@@ -185,11 +243,11 @@ function ResultsContent() {
           </div>
           <div className={s.distPills}>
             {Object.entries(distCount).map(([dist, count]) => {
-              const ds = distStyle(dist);
+              const style = ds(dist);
               return (
                 <span key={dist} className={s.distLink}
-                  style={{ background: ds.bg, color: ds.color, borderColor: ds.border }}>
-                  <span className={s.distDot} style={{ background: ds.dot }} />
+                  style={{ background:style.bg, color:style.color, borderColor:style.border }}>
+                  <span className={s.distDot} style={{ background:style.dot }} />
                   {dist} · {count}
                 </span>
               );
@@ -214,11 +272,13 @@ function ResultsContent() {
             <div className={s.statValue}>{found.length} / {data.results.length}</div>
             <div className={s.statSub}>components with stock</div>
           </div>
-          {resolved.length > 0 && (
-            <div className={s.statCard}>
-              <div className={s.statLabel}>Auto-resolved</div>
-              <div className={s.statValue}>{resolved.length}</div>
-              <div className={s.statSub}>distributor codes → MPN</div>
+          {outOfStock.length > 0 && (
+            <div className={s.statCard} style={{ borderColor:"#fde68a", background:"#fffbeb" }}>
+              <div className={s.statLabel}>Out of stock</div>
+              <div className={s.statValue} style={{ color:"var(--amber)" }}>
+                {outOfStock.length}
+              </div>
+              <div className={s.statSub}>click Resolve to fix</div>
             </div>
           )}
           {notFound.length > 0 && (
@@ -230,9 +290,21 @@ function ResultsContent() {
           )}
         </div>
 
+        {/* Out of stock notice */}
+        {outOfStock.length > 0 && (
+          <div className={s.notice} style={{
+            background:"#fffbeb", borderColor:"#fde68a", color:"#92400e", marginBottom:12
+          }}>
+            <strong>⚠ {outOfStock.length} component{outOfStock.length > 1 ? "s" : ""} out of stock.</strong>
+            {" "}Click <strong>Resolve</strong> to instantly switch to the next best available option.
+          </div>
+        )}
+
         {/* Auto-resolve notice */}
         {resolved.length > 0 && (
-          <div className={`${s.notice} ${s.noticeViolet}`}>
+          <div className={s.notice} style={{
+            background:"var(--violet-light)", borderColor:"#e9d5ff", color:"var(--violet)"
+          }}>
             <strong>Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}</strong>
             {" "}— order codes were automatically converted to manufacturer part numbers.
           </div>
@@ -255,7 +327,11 @@ function ResultsContent() {
               </thead>
               <tbody>
                 {data.results.map(r => (
-                  <ResultRow key={r.originalCode ?? r.mpn} r={r} />
+                  <ResultRow
+                    key={r.originalCode ?? r.mpn}
+                    r={r}
+                    onResolve={handleResolve}
+                  />
                 ))}
               </tbody>
             </table>
@@ -265,12 +341,11 @@ function ResultsContent() {
         {/* Legend */}
         <div className={s.legend}>
           <span>
-            <span className={s.adjBadge}>ADJ</span>
-            {" "}Qty rounded to nearest package unit
+            <span className={s.adjBadge}>ADJ</span> Qty rounded to nearest package unit
           </span>
           <span>
-            <span className={s.legendDot} style={{ background: "#a78bfa" }} />
-            Distributor code auto-resolved to MPN
+            <span className={s.legendDot} style={{ background:"#a78bfa" }} />
+            Distributor code auto-resolved
           </span>
           <span>Prices are indicative — verify on distributor site</span>
         </div>
@@ -283,7 +358,6 @@ function ResultsContent() {
           <span className={s.footerText}>Built for hardware buyers</span>
         </div>
       </footer>
-
     </div>
   );
 }
