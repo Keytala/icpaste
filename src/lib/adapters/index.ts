@@ -1,22 +1,25 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  icpaste.com — Distributor Registry
-//
-//  To add a new distributor:
-//  1. Create src/lib/adapters/your-distributor.adapter.ts
-//  2. Import it below
-//  3. Add it to the `distributors` array
-//  That's it. The engine picks it up automatically.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { DistributorAdapter } from "./adapter.interface";
-import { MouserAdapter }      from "./mouser.adapter";
-import { DigikeyAdapter }     from "./digikey.adapter";
-import { FarnellAdapter }     from "./farnell.adapter";
-// import { TMEAdapter }      from "./tme.adapter";      // ← future
-// import { RSAdapter }       from "./rs.adapter";       // ← future
+import { DistributorAdapter }  from "./adapter.interface";
+import { MouserAdapter }       from "./mouser.adapter";
+import { DigikeyAdapter }      from "./digikey.adapter";
+import { FarnellAdapter }      from "./farnell.adapter";
+import {
+  MockMouserAdapter,
+  MockDigikeyAdapter,
+  MockFarnellAdapter,
+} from "./mock.adapter";
 
-export const distributors: DistributorAdapter[] = [
-  MouserAdapter,
-  DigikeyAdapter,
-  FarnellAdapter,
-];
+// ── Forza mock se le API keys non sono configurate ────────────────────────────
+const USE_MOCK =
+  process.env.NEXT_PUBLIC_USE_MOCK === "true" ||
+  !process.env.MOUSER_API_KEY ||
+  process.env.MOUSER_API_KEY === "placeholder";
+
+console.log(`[icpaste] Using ${USE_MOCK ? "MOCK" : "REAL"} adapters`);
+
+export const distributors: DistributorAdapter[] = USE_MOCK
+  ? [MockMouserAdapter, MockDigikeyAdapter, MockFarnellAdapter]
+  : [MouserAdapter, DigikeyAdapter, FarnellAdapter];
