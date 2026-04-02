@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { parseBom }  from "@/lib/utils/bom-parser";
 import s from "./Home.module.css";
@@ -21,7 +21,7 @@ export default function HomePage() {
   const lineCount = lines.filter(l => l.trim()).length;
   const displayLines = input ? lines : PLACEHOLDER.split("\n");
 
-  function handleSearch() {
+  const handleSearch = useCallback(() => {
     setError("");
     const bom = parseBom(input);
     if (bom.length === 0) {
@@ -31,10 +31,15 @@ export default function HomePage() {
     setLoading(true);
     const encoded = btoa(JSON.stringify(bom));
     router.push(`/results?bom=${encoded}`);
-  }
+  }, [input, router]);
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSearch();
+  // ── Fix: intercetta Ctrl+Enter e Cmd+Enter ────────────────────────────────
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSearch();
+    }
   }
 
   return (
@@ -95,7 +100,7 @@ export default function HomePage() {
             {/* Body: line numbers + textarea */}
             <div className={s.inputBody}>
               <div className={s.lineNumbers}>
-                {displayLines.slice(0, 40).map((_, i) => (
+                {displayLines.slice(0, 1000).map((_, i) => (
                   <div key={i} className={s.lineNum}>{i + 1}</div>
                 ))}
               </div>
@@ -115,7 +120,7 @@ export default function HomePage() {
             <div className={s.inputBoxBottom}>
               <div className={s.inputHints}>
                 <span>CSV, tab or space separated</span>
-                <span>Max 100 rows</span>
+                <span>Max 1000 rows</span>
                 <span>
                   <kbd className={s.kbd}>⌘ Enter</kbd> to search
                 </span>
