@@ -7,36 +7,8 @@ import { parseBom }  from "@/lib/utils/bom-parser";
 const PLACEHOLDER = `LM358N 100
 BC547B 500
 GRM188R71C104KA01D 6800
-STM32F103C8T6 10`;
-
-const FEATURES = [
-  {
-    icon: "⚡",
-    title: "Instant results",
-    desc:  "All distributors searched in parallel. Results in seconds.",
-  },
-  {
-    icon: "📦",
-    title: "Smart quantity",
-    desc:  "Auto-rounds to the nearest reel or package unit.",
-  },
-  {
-    icon: "🏷️",
-    title: "Best price only",
-    desc:  "No noise. Just the cheapest option with stock.",
-  },
-  {
-    icon: "🔍",
-    title: "Any code format",
-    desc:  "MPN, Mouser, Digi-Key or Farnell codes — all accepted.",
-  },
-];
-
-const DISTRIBUTORS = [
-  { name: "Mouser",   color: "text-blue-400",   dot: "bg-blue-400" },
-  { name: "Digi-Key", color: "text-yellow-400",  dot: "bg-yellow-400" },
-  { name: "Farnell",  color: "text-green-400",   dot: "bg-green-400" },
-];
+STM32F103C8T6 10
+NE555P 250`;
 
 export default function HomePage() {
   const router  = useRouter();
@@ -44,11 +16,13 @@ export default function HomePage() {
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
 
+  const lineCount = input.split("\n").filter(l => l.trim()).length;
+
   function handleSearch() {
     setError("");
     const bom = parseBom(input);
     if (bom.length === 0) {
-      setError("No valid components found. Try: LM358N 100");
+      setError("No valid components found. Enter one MPN and quantity per line — e.g. LM358N 100");
       return;
     }
     setLoading(true);
@@ -60,79 +34,95 @@ export default function HomePage() {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSearch();
   }
 
-  const lineCount = input.split("\n").filter(l => l.trim()).length;
-
   return (
-    <main className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
 
-      {/* ── Top bar ── */}
-      <header className="flex items-center justify-between px-6 py-4 border-b"
-        style={{ borderColor: "var(--border)" }}>
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-bold tracking-tight">
-            ic<span className="text-sky-400">paste</span>
-          </span>
-          <span className="tag text-[10px] font-semibold"
-            style={{ background: "var(--brand-dim)", color: "var(--brand)" }}>
-            BETA
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {DISTRIBUTORS.map(d => (
-            <span key={d.name}
-              className="hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
-              style={{ background: "var(--surface-2)", color: "var(--text-2)" }}>
-              <span className={`w-1.5 h-1.5 rounded-full ${d.dot}`} />
-              {d.name}
+      {/* ── Header ── */}
+      <header className="border-b" style={{ borderColor: "var(--border)" }}>
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+          <span className="text-base font-bold tracking-tight text-gray-900">
+            ic<span className="text-sky-500">paste</span>
+            <span className="ml-2 text-[10px] font-semibold tracking-widest
+                             text-sky-600 bg-sky-50 border border-sky-200
+                             px-2 py-0.5 rounded-full align-middle">
+              BETA
             </span>
-          ))}
+          </span>
+          <div className="flex items-center gap-1.5">
+            {["Mouser", "Digi-Key", "Farnell"].map(d => (
+              <span key={d}
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs
+                           text-gray-500 bg-gray-50 border border-gray-200
+                           px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                {d}
+              </span>
+            ))}
+          </div>
         </div>
       </header>
 
-      {/* ── Hero ── */}
-      <section className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center">
-
-        {/* Glow blob */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2
-                        w-96 h-96 rounded-full pointer-events-none"
-          style={{
-            background: "radial-gradient(circle, rgba(56,189,248,0.06) 0%, transparent 70%)",
-          }} />
-
-        <div className="relative z-10 w-full max-w-2xl">
+      {/* ── Main ── */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16">
+        <div className="w-full max-w-3xl">
 
           {/* Headline */}
-          <h1 className="text-4xl sm:text-6xl font-bold tracking-tight mb-4 leading-tight">
-            Find the best price<br />
-            <span className="gradient-text">for every component.</span>
-          </h1>
-          <p className="text-slate-400 text-lg mb-10 max-w-lg mx-auto leading-relaxed">
-            Paste your BOM. We search Mouser, Digi-Key and Farnell simultaneously
-            and return only the best deal — ready to buy.
-          </p>
+          <div className="text-center mb-10">
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-gray-900 mb-4 leading-tight">
+              Find the best price<br />
+              <span className="text-sky-500">for every component.</span>
+            </h1>
+            <p className="text-gray-500 text-lg max-w-xl mx-auto leading-relaxed">
+              Paste your BOM below. We search Mouser, Digi-Key and Farnell
+              simultaneously and return only the best deal — stock included.
+            </p>
+          </div>
 
-          {/* Input card */}
-          <div className="card p-1 mb-3 shadow-2xl">
-            {/* Textarea header */}
-            <div className="flex items-center justify-between px-4 pt-3 pb-2">
-              <span className="text-xs font-medium" style={{ color: "var(--text-3)" }}>
-                BOM INPUT — one component per line
+          {/* ── Input box ── */}
+          <div className="rounded-2xl border shadow-sm overflow-hidden"
+            style={{ borderColor: "var(--border)" }}>
+
+            {/* Top bar */}
+            <div className="flex items-center justify-between px-5 py-3 border-b"
+              style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+              <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                BOM Input
               </span>
-              {lineCount > 0 && (
-                <span className="tag text-[10px]"
-                  style={{ background: "var(--brand-dim)", color: "var(--brand)" }}>
-                  {lineCount} {lineCount === 1 ? "component" : "components"}
+              <div className="flex items-center gap-3">
+                {lineCount > 0 && (
+                  <span className="text-xs font-medium text-sky-600 bg-sky-50
+                                   border border-sky-200 px-2.5 py-0.5 rounded-full">
+                    {lineCount} {lineCount === 1 ? "component" : "components"}
+                  </span>
+                )}
+                <span className="text-xs text-gray-400">
+                  MPN &nbsp;·&nbsp; QTY &nbsp;·&nbsp; one per line
                 </span>
-              )}
+              </div>
             </div>
 
-            {/* Divider */}
-            <div style={{ height: 1, background: "var(--border)", margin: "0 16px" }} />
-
             {/* Textarea */}
-            <div className="px-4 pt-3 pb-2">
+            <div className="relative">
+              {/* Line numbers */}
+              <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col
+                              pt-4 pb-4 items-center pointer-events-none select-none"
+                style={{ borderRight: "1px solid var(--border)" }}>
+                {(input || PLACEHOLDER).split("\n").slice(0, 30).map((_, i) => (
+                  <div key={i} className="text-xs leading-6 text-gray-300 w-full text-center">
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
+
               <textarea
-                className="bom-textarea w-full h-40"
+                className="w-full pl-14 pr-5 py-4 font-mono text-sm text-gray-800
+                           placeholder-gray-300 focus:outline-none resize-none
+                           leading-6"
+                style={{
+                  background:  "var(--bg)",
+                  minHeight:   "280px",
+                  caretColor:  "var(--brand)",
+                }}
                 placeholder={PLACEHOLDER}
                 value={input}
                 onChange={e => setInput(e.target.value)}
@@ -141,63 +131,70 @@ export default function HomePage() {
               />
             </div>
 
-            {/* Footer bar */}
-            <div className="flex items-center justify-between px-4 pb-4 pt-1">
-              <p className="text-xs" style={{ color: "var(--text-3)" }}>
-                MPN·QTY &nbsp;·&nbsp; CSV &nbsp;·&nbsp; Tab &nbsp;·&nbsp; Max 100 rows
-                &nbsp;·&nbsp;
-                <kbd className="px-1 py-0.5 rounded text-[10px]"
-                  style={{ background: "var(--surface-2)", color: "var(--text-2)" }}>
-                  ⌘ Enter
-                </kbd>
-                {" "}to search
-              </p>
+            {/* Bottom bar */}
+            <div className="flex items-center justify-between px-5 py-3 border-t"
+              style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+              <div className="flex items-center gap-4 text-xs text-gray-400">
+                <span>Supports CSV, tab or space separated</span>
+                <span className="hidden sm:inline">Max 100 rows</span>
+                <span className="hidden sm:inline">
+                  <kbd className="px-1.5 py-0.5 rounded text-[11px] font-medium
+                                  bg-white border border-gray-200 text-gray-500 shadow-sm">
+                    ⌘ Enter
+                  </kbd>
+                  {" "}to search
+                </span>
+              </div>
               <button
                 className="btn-primary"
                 onClick={handleSearch}
                 disabled={loading || input.trim().length === 0}
               >
-                {loading ? (
-                  <><span className="spinner" /> Searching…</>
-                ) : (
-                  <>Find best prices <span className="opacity-70">→</span></>
-                )}
+                {loading
+                  ? <><span className="spinner" /> Searching…</>
+                  : <>Find best prices <span className="ml-1 opacity-60 text-base">→</span></>
+                }
               </button>
             </div>
           </div>
 
+          {/* Error */}
           {error && (
-            <p className="text-sm text-red-400 text-left px-1 fade-up">{error}</p>
+            <p className="mt-3 text-sm text-red-500 px-1 fade-up">{error}</p>
           )}
-        </div>
-      </section>
 
-      {/* ── Features ── */}
-      <section className="px-4 pb-16 max-w-2xl mx-auto w-full">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {FEATURES.map(f => (
-            <div key={f.title} className="card-hover p-4 text-left">
-              <div className="text-xl mb-2">{f.icon}</div>
-              <div className="text-sm font-semibold text-slate-200 mb-1">{f.title}</div>
-              <div className="text-xs leading-relaxed" style={{ color: "var(--text-3)" }}>
-                {f.desc}
+          {/* Format hint */}
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { label: "MPN + Quantity",       example: "LM358N 100",        note: "space separated" },
+              { label: "Distributor code",      example: "512-LM358N 100",    note: "auto-resolved to MPN" },
+              { label: "CSV / tab format",      example: "LM358N,100",        note: "comma or tab" },
+            ].map(h => (
+              <div key={h.label}
+                className="rounded-xl border px-4 py-3"
+                style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+                <p className="text-xs font-semibold text-gray-500 mb-1">{h.label}</p>
+                <p className="font-mono text-sm text-gray-800">{h.example}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{h.note}</p>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+
         </div>
-      </section>
+      </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t py-5 px-6 flex items-center justify-between"
-        style={{ borderColor: "var(--border)" }}>
-        <span className="text-xs" style={{ color: "var(--text-3)" }}>
-          © {new Date().getFullYear()} icpaste.com
-        </span>
-        <span className="text-xs" style={{ color: "var(--text-3)" }}>
-          Built for hardware buyers
-        </span>
+      <footer className="border-t py-5 px-6" style={{ borderColor: "var(--border)" }}>
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <span className="text-xs text-gray-400">
+            © {new Date().getFullYear()} icpaste.com
+          </span>
+          <span className="text-xs text-gray-400">
+            Built for hardware buyers
+          </span>
+        </div>
       </footer>
 
-    </main>
+    </div>
   );
 }
