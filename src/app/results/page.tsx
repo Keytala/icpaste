@@ -3,141 +3,97 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter }    from "next/navigation";
 import { SearchResponse, OptimizedResult } from "@/lib/types";
+import s from "./Results.module.css";
 
 // ── Distributor styles ────────────────────────────────────────────────────────
-const DIST_STYLE: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  "Mouser":          { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe", dot: "#3b82f6" },
-  "Mouser (Mock)":   { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe", dot: "#3b82f6" },
-  "Digi-Key":        { bg: "#fffbeb", text: "#b45309", border: "#fde68a", dot: "#f59e0b" },
-  "Digi-Key (Mock)": { bg: "#fffbeb", text: "#b45309", border: "#fde68a", dot: "#f59e0b" },
-  "Farnell":         { bg: "#f0fdf4", text: "#15803d", border: "#bbf7d0", dot: "#22c55e" },
-  "Farnell (Mock)":  { bg: "#f0fdf4", text: "#15803d", border: "#bbf7d0", dot: "#22c55e" },
+const DIST: Record<string, { bg: string; color: string; border: string; dot: string }> = {
+  "Mouser":          { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe", dot: "#3b82f6" },
+  "Mouser (Mock)":   { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe", dot: "#3b82f6" },
+  "Digi-Key":        { bg: "#fffbeb", color: "#b45309", border: "#fde68a", dot: "#f59e0b" },
+  "Digi-Key (Mock)": { bg: "#fffbeb", color: "#b45309", border: "#fde68a", dot: "#f59e0b" },
+  "Farnell":         { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", dot: "#22c55e" },
+  "Farnell (Mock)":  { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", dot: "#22c55e" },
 };
 
-function ds(name: string) {
-  return DIST_STYLE[name] ?? { bg: "#f9fafb", text: "#374151", border: "#e5e7eb", dot: "#9ca3af" };
-}
-
-// ── Icons ─────────────────────────────────────────────────────────────────────
-const ArrowLeft = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-  </svg>
-);
-
-const ExternalLink = () => (
-  <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-  </svg>
-);
-
-// ── Stat Card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent }: {
-  label: string; value: string; sub?: string; accent?: boolean;
-}) {
-  return (
-    <div className="rounded-xl border px-5 py-4"
-      style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
-        {label}
-      </p>
-      <p className={`text-2xl font-bold tabular-nums ${accent ? "text-sky-500" : "text-gray-900"}`}>
-        {value}
-      </p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-    </div>
-  );
+function distStyle(name: string) {
+  return DIST[name] ?? { bg: "#f9fafb", color: "#374151", border: "#e5e7eb", dot: "#9ca3af" };
 }
 
 // ── Result Row ────────────────────────────────────────────────────────────────
 function ResultRow({ r }: { r: OptimizedResult }) {
   const hasError    = Boolean(r.error);
   const wasResolved = Boolean(r.originalCode && r.originalCode !== r.mpn);
-  const style       = ds(r.distributor);
+  const ds          = distStyle(r.distributor);
 
   return (
-    <tr className="border-b transition-colors duration-100 hover:bg-gray-50"
-      style={{ borderColor: "var(--border)" }}>
+    <tr className={s.tr}>
 
       {/* MPN */}
-      <td className="py-3.5 px-5">
-        <div>
-          <span className="font-mono text-sm font-medium text-gray-900">{r.mpn}</span>
-          {wasResolved && (
-            <div className="mt-0.5">
-              <span className="text-[10px] font-medium text-violet-500 bg-violet-50
-                               border border-violet-200 px-1.5 py-0.5 rounded-full">
-                ↑ {r.originalCode}
-              </span>
-            </div>
-          )}
-        </div>
+      <td className={s.td}>
+        <div className={s.mpn}>{r.mpn}</div>
+        {wasResolved && (
+          <div>
+            <span className={s.resolvedBadge}>↑ {r.originalCode}</span>
+          </div>
+        )}
       </td>
 
       {/* Description */}
-      <td className="py-3.5 px-5 hidden lg:table-cell max-w-[220px]">
-        <span className="text-xs text-gray-400 truncate block">{r.description || "—"}</span>
+      <td className={`${s.td} ${s.desc}`} style={{ maxWidth: 200 }}>
+        <span style={{
+          display: "block",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}>
+          {r.description || "—"}
+        </span>
       </td>
 
       {/* Requested */}
-      <td className="py-3.5 px-5 text-right">
-        <span className="text-sm tabular-nums text-gray-500">
+      <td className={`${s.td} ${s.tdRight}`}>
+        <span style={{ color: "var(--text-2)", fontVariantNumeric: "tabular-nums" }}>
           {r.requestedQty.toLocaleString()}
         </span>
       </td>
 
       {/* Buy qty */}
-      <td className="py-3.5 px-5 text-right">
-        <div className="inline-flex items-center gap-1.5 justify-end">
-          <span className={`text-sm font-semibold tabular-nums
-            ${r.rounded ? "text-amber-600" : "text-gray-900"}`}>
-            {r.optimalQty.toLocaleString()}
-          </span>
-          {r.rounded && (
-            <span className="text-[9px] font-bold text-amber-600 bg-amber-50
-                             border border-amber-200 px-1.5 py-0.5 rounded-full">
-              ADJ
-            </span>
-          )}
-        </div>
+      <td className={`${s.td} ${s.tdRight}`}>
+        <span className={r.rounded ? s.qtyAdjusted : s.qtyNormal}
+          style={{ fontVariantNumeric: "tabular-nums" }}>
+          {r.optimalQty.toLocaleString()}
+        </span>
+        {r.rounded && <span className={s.adjBadge}>ADJ</span>}
       </td>
 
       {/* Unit price */}
-      <td className="py-3.5 px-5 text-right hidden sm:table-cell">
-        <span className="text-sm tabular-nums text-gray-500">
+      <td className={`${s.td} ${s.tdRight} ${s.priceUnit}`}>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>
           {hasError ? "—" : `${r.currency} ${r.unitPrice.toFixed(4)}`}
         </span>
       </td>
 
       {/* Total */}
-      <td className="py-3.5 px-5 text-right">
-        <span className="text-sm font-bold tabular-nums text-gray-900">
+      <td className={`${s.td} ${s.tdRight} ${s.priceTotal}`}>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>
           {hasError ? "—" : `${r.currency} ${r.totalPrice.toFixed(2)}`}
         </span>
       </td>
 
       {/* Best deal */}
-      <td className="py-3.5 px-5 text-right">
+      <td className={`${s.td} ${s.tdRight}`}>
         {hasError ? (
-          <span className="text-xs text-red-500 bg-red-50 border border-red-200
-                           px-2.5 py-1 rounded-full font-medium">
-            Not found
-          </span>
+          <span className={s.notFound}>Not found</span>
         ) : (
-          <a
-            href={r.productUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center text-xs font-semibold
-                       px-3 py-1.5 rounded-full border
-                       hover:opacity-80 transition-opacity"
-            style={{ background: style.bg, color: style.text, borderColor: style.border }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full mr-1.5 flex-shrink-0"
-              style={{ background: style.dot }} />
+          <a href={r.productUrl} target="_blank" rel="noopener noreferrer"
+            className={s.distLink}
+            style={{ background: ds.bg, color: ds.color, borderColor: ds.border }}>
+            <span className={s.distDot} style={{ background: ds.dot }} />
             {r.distributor}
-            <ExternalLink />
+            <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
           </a>
         )}
       </td>
@@ -156,15 +112,14 @@ function ResultsContent() {
   useEffect(() => {
     const encoded = params.get("bom");
     if (!encoded) { router.push("/"); return; }
-
     let bom;
     try { bom = JSON.parse(atob(encoded)); }
     catch { router.push("/"); return; }
 
     fetch("/api/search", {
-      method:  "POST",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ bom }),
+      body: JSON.stringify({ bom }),
     })
       .then(r => r.json())
       .then(json => {
@@ -175,43 +130,29 @@ function ResultsContent() {
       .finally(() => setLoading(false));
   }, [params, router]);
 
-  // ── Loading ──
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6"
-        style={{ background: "var(--bg)" }}>
-        <div className="flex flex-col items-center gap-4">
-          {/* Animated dots */}
-          <div className="flex items-center gap-2">
-            {["Mouser", "Digi-Key", "Farnell"].map((d, i) => (
-              <div key={d} className="flex items-center gap-1.5 text-xs font-medium
-                                      text-gray-400 bg-gray-50 border border-gray-200
-                                      px-3 py-1.5 rounded-full"
-                style={{ animationDelay: `${i * 150}ms` }}>
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-300
-                                 animate-pulse" />
-                {d}
-              </div>
-            ))}
-          </div>
-          <p className="text-gray-400 text-sm">Searching distributors…</p>
+      <div className={s.loading}>
+        <div className={s.loadingPills}>
+          {["Mouser", "Digi-Key", "Farnell"].map((d, i) => (
+            <div key={d} className={s.loadingPill}
+              style={{ animationDelay: `${i * 150}ms` }}>
+              <span className={s.loadingDot}
+                style={{ animationDelay: `${i * 200}ms` }} />
+              {d}
+            </div>
+          ))}
         </div>
+        <p className={s.loadingText}>Searching distributors…</p>
       </div>
     );
   }
 
-  // ── Error ──
   if (apiError) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4"
-        style={{ background: "var(--bg)" }}>
-        <div className="rounded-2xl border px-8 py-6 text-center max-w-sm"
-          style={{ borderColor: "var(--border)" }}>
-          <p className="text-red-500 font-medium mb-4">{apiError}</p>
-          <button className="btn-primary" onClick={() => router.push("/")}>
-            ← Back to search
-          </button>
-        </div>
+      <div className={s.loading}>
+        <p style={{ color: "var(--red)", fontFamily: "Inter, sans-serif" }}>{apiError}</p>
+        <button className={s.btnBack} onClick={() => router.push("/")}>← Back</button>
       </div>
     );
   }
@@ -228,33 +169,27 @@ function ResultsContent() {
   }, {} as Record<string, number>);
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+    <div className={s.page}>
 
-      {/* ── Header ── */}
-      <header className="sticky top-0 z-20 border-b bg-white/90 backdrop-blur-md"
-        style={{ borderColor: "var(--border)" }}>
-        <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button className="btn-ghost" onClick={() => router.push("/")}>
-              <ArrowLeft /> New search
+      {/* Header */}
+      <header className={s.header}>
+        <div className={s.headerInner}>
+          <div className={s.headerLeft}>
+            <button className={s.btnBack} onClick={() => router.push("/")}>
+              ← New search
             </button>
-            <div className="w-px h-4 bg-gray-200" />
-            <span className="text-sm font-bold text-gray-900">
-              ic<span className="text-sky-500">paste</span>
+            <div className={s.divider} />
+            <span className={s.logo}>
+              ic<span className={s.logoAccent}>paste</span>
             </span>
           </div>
-
-          {/* Distributor breakdown */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className={s.distPills}>
             {Object.entries(distCount).map(([dist, count]) => {
-              const s = ds(dist);
+              const ds = distStyle(dist);
               return (
-                <span key={dist}
-                  className="inline-flex items-center text-xs font-medium
-                             px-2.5 py-1 rounded-full border"
-                  style={{ background: s.bg, color: s.text, borderColor: s.border }}>
-                  <span className="w-1.5 h-1.5 rounded-full mr-1.5"
-                    style={{ background: s.dot }} />
+                <span key={dist} className={s.distLink}
+                  style={{ background: ds.bg, color: ds.color, borderColor: ds.border }}>
+                  <span className={s.distDot} style={{ background: ds.dot }} />
                   {dist} · {count}
                 </span>
               );
@@ -263,77 +198,59 @@ function ResultsContent() {
         </div>
       </header>
 
-      {/* ── Content ── */}
-      <main className="flex-1 max-w-6xl mx-auto w-full px-5 py-8">
+      <main className={s.main}>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 fade-up">
-          <StatCard
-            label="BOM Total"
-            value={`${data.currency} ${data.totalBom.toFixed(2)}`}
-            sub="estimated cost"
-            accent
-          />
-          <StatCard
-            label="Found"
-            value={`${found.length} / ${data.results.length}`}
-            sub="components with stock"
-          />
+        <div className={s.stats}>
+          <div className={s.statCard}>
+            <div className={s.statLabel}>BOM Total</div>
+            <div className={`${s.statValue} ${s.statValueAccent}`}>
+              {data.currency} {data.totalBom.toFixed(2)}
+            </div>
+            <div className={s.statSub}>estimated cost</div>
+          </div>
+          <div className={s.statCard}>
+            <div className={s.statLabel}>Found</div>
+            <div className={s.statValue}>{found.length} / {data.results.length}</div>
+            <div className={s.statSub}>components with stock</div>
+          </div>
           {resolved.length > 0 && (
-            <StatCard
-              label="Auto-resolved"
-              value={`${resolved.length}`}
-              sub="distributor codes → MPN"
-            />
+            <div className={s.statCard}>
+              <div className={s.statLabel}>Auto-resolved</div>
+              <div className={s.statValue}>{resolved.length}</div>
+              <div className={s.statSub}>distributor codes → MPN</div>
+            </div>
           )}
           {notFound.length > 0 && (
-            <StatCard
-              label="Not found"
-              value={`${notFound.length}`}
-              sub="check MPN manually"
-            />
+            <div className={s.statCard}>
+              <div className={s.statLabel}>Not found</div>
+              <div className={s.statValue}>{notFound.length}</div>
+              <div className={s.statSub}>check MPN manually</div>
+            </div>
           )}
         </div>
 
         {/* Auto-resolve notice */}
         {resolved.length > 0 && (
-          <div className="mb-4 px-4 py-3 rounded-xl text-sm border fade-up"
-            style={{
-              background:   "#faf5ff",
-              borderColor:  "#e9d5ff",
-              color:        "#7c3aed",
-            }}>
-            <span className="font-semibold">
-              Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}
-            </span>
+          <div className={`${s.notice} ${s.noticeViolet}`}>
+            <strong>Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}</strong>
             {" "}— order codes were automatically converted to manufacturer part numbers.
           </div>
         )}
 
         {/* Table */}
-        <div className="rounded-2xl border overflow-hidden fade-up"
-          style={{ borderColor: "var(--border)" }}>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b"
-                  style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-                  {[
-                    { label: "MPN",         align: "left",   hide: "" },
-                    { label: "Description", align: "left",   hide: "hidden lg:table-cell" },
-                    { label: "Requested",   align: "right",  hide: "" },
-                    { label: "Buy Qty",     align: "right",  hide: "" },
-                    { label: "Unit Price",  align: "right",  hide: "hidden sm:table-cell" },
-                    { label: "Total",       align: "right",  hide: "" },
-                    { label: "Best Deal",   align: "right",  hide: "" },
-                  ].map(h => (
-                    <th key={h.label}
-                      className={`py-3 px-5 text-xs font-semibold uppercase tracking-widest
-                                  text-gray-400 ${h.hide}
-                                  ${h.align === "right" ? "text-right" : "text-left"}`}>
-                      {h.label}
-                    </th>
-                  ))}
+        <div className={s.tableWrap}>
+          <div className={s.tableScroll}>
+            <table className={s.table}>
+              <thead className={s.thead}>
+                <tr>
+                  <th className={`${s.th} ${s.thLeft}`}>MPN</th>
+                  <th className={`${s.th} ${s.thLeft}`}>Description</th>
+                  <th className={`${s.th} ${s.thRight}`}>Requested</th>
+                  <th className={`${s.th} ${s.thRight}`}>Buy Qty</th>
+                  <th className={`${s.th} ${s.thRight}`}>Unit Price</th>
+                  <th className={`${s.th} ${s.thRight}`}>Total</th>
+                  <th className={`${s.th} ${s.thRight}`}>Best Deal</th>
                 </tr>
               </thead>
               <tbody>
@@ -346,26 +263,24 @@ function ResultsContent() {
         </div>
 
         {/* Legend */}
-        <div className="flex flex-wrap items-center gap-5 mt-4 text-xs text-gray-400">
-          <span className="flex items-center gap-1.5">
-            <span className="text-[9px] font-bold text-amber-600 bg-amber-50
-                             border border-amber-200 px-1.5 py-0.5 rounded-full">ADJ</span>
-            Qty rounded to nearest package unit
+        <div className={s.legend}>
+          <span>
+            <span className={s.adjBadge}>ADJ</span>
+            {" "}Qty rounded to nearest package unit
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-violet-400" />
+          <span>
+            <span className={s.legendDot} style={{ background: "#a78bfa" }} />
             Distributor code auto-resolved to MPN
           </span>
-          <span>Prices are indicative — verify on distributor site before ordering</span>
+          <span>Prices are indicative — verify on distributor site</span>
         </div>
 
       </main>
 
-      {/* Footer */}
-      <footer className="border-t py-5 px-6" style={{ borderColor: "var(--border)" }}>
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <span className="text-xs text-gray-400">© {new Date().getFullYear()} icpaste.com</span>
-          <span className="text-xs text-gray-400">Built for hardware buyers</span>
+      <footer className={s.footer}>
+        <div className={s.footerInner}>
+          <span className={s.footerText}>© {new Date().getFullYear()} icpaste.com</span>
+          <span className={s.footerText}>Built for hardware buyers</span>
         </div>
       </footer>
 
