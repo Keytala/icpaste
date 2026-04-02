@@ -4,10 +4,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { searchBom }                 from "@/lib/engine/search.engine";
-import { parseBom }                  from "@/lib/utils/bom-parser";
-import { BomRow }                    from "@/lib/types";
+import { parseBom, BomRow }          from "@/lib/utils/bom-parser";
 
-export const runtime = "nodejs"; // required for fetch + env vars on Vercel
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +18,7 @@ export async function POST(req: NextRequest) {
     if (typeof body.raw === "string") {
       bom = parseBom(body.raw);
     } else if (Array.isArray(body.bom)) {
-      bom = body.bom;
+      bom = body.bom as BomRow[];
     }
 
     if (bom.length === 0) {
