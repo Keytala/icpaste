@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseBom }  from "@/lib/utils/bom-parser";
+import s from "./Home.module.css";
 
 const PLACEHOLDER = `LM358N 100
 BC547B 500
@@ -16,7 +17,9 @@ export default function HomePage() {
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
 
-  const lineCount = input.split("\n").filter(l => l.trim()).length;
+  const lines     = input.split("\n");
+  const lineCount = lines.filter(l => l.trim()).length;
+  const displayLines = input ? lines : PLACEHOLDER.split("\n");
 
   function handleSearch() {
     setError("");
@@ -35,26 +38,21 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+    <div className={s.page}>
 
       {/* ── Header ── */}
-      <header className="border-b" style={{ borderColor: "var(--border)" }}>
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="text-base font-bold tracking-tight text-gray-900">
-            ic<span className="text-sky-500">paste</span>
-            <span className="ml-2 text-[10px] font-semibold tracking-widest
-                             text-sky-600 bg-sky-50 border border-sky-200
-                             px-2 py-0.5 rounded-full align-middle">
-              BETA
+      <header className={s.header}>
+        <div className={s.headerInner}>
+          <div>
+            <span className={s.logo}>
+              ic<span className={s.logoAccent}>paste</span>
             </span>
-          </span>
-          <div className="flex items-center gap-1.5">
+            <span className={s.betaBadge}>BETA</span>
+          </div>
+          <div className={s.distPills}>
             {["Mouser", "Digi-Key", "Farnell"].map(d => (
-              <span key={d}
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs
-                           text-gray-500 bg-gray-50 border border-gray-200
-                           px-2.5 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+              <span key={d} className={s.distPill}>
+                <span className={s.distDot} />
                 {d}
               </span>
             ))}
@@ -63,119 +61,93 @@ export default function HomePage() {
       </header>
 
       {/* ── Main ── */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16">
-        <div className="w-full max-w-3xl">
+      <main className={s.main}>
+        <div className={s.container}>
 
           {/* Headline */}
-          <div className="text-center mb-10">
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-gray-900 mb-4 leading-tight">
+          <div className={s.headline}>
+            <h1 className={s.title}>
               Find the best price<br />
-              <span className="text-sky-500">for every component.</span>
+              <span className={s.titleAccent}>for every component.</span>
             </h1>
-            <p className="text-gray-500 text-lg max-w-xl mx-auto leading-relaxed">
+            <p className={s.subtitle}>
               Paste your BOM below. We search Mouser, Digi-Key and Farnell
               simultaneously and return only the best deal — stock included.
             </p>
           </div>
 
-          {/* ── Input box ── */}
-          <div className="rounded-2xl border shadow-sm overflow-hidden"
-            style={{ borderColor: "var(--border)" }}>
+          {/* Input Box */}
+          <div className={s.inputBox}>
 
             {/* Top bar */}
-            <div className="flex items-center justify-between px-5 py-3 border-b"
-              style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-              <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-                BOM Input
-              </span>
-              <div className="flex items-center gap-3">
+            <div className={s.inputBoxTop}>
+              <span className={s.inputLabel}>BOM Input</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 {lineCount > 0 && (
-                  <span className="text-xs font-medium text-sky-600 bg-sky-50
-                                   border border-sky-200 px-2.5 py-0.5 rounded-full">
+                  <span className={s.componentCount}>
                     {lineCount} {lineCount === 1 ? "component" : "components"}
                   </span>
                 )}
-                <span className="text-xs text-gray-400">
-                  MPN &nbsp;·&nbsp; QTY &nbsp;·&nbsp; one per line
-                </span>
+                <span className={s.inputLabel}>MPN · QTY · one per line</span>
               </div>
             </div>
 
-            {/* Textarea */}
-            <div className="relative">
-              {/* Line numbers */}
-              <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col
-                              pt-4 pb-4 items-center pointer-events-none select-none"
-                style={{ borderRight: "1px solid var(--border)" }}>
-                {(input || PLACEHOLDER).split("\n").slice(0, 30).map((_, i) => (
-                  <div key={i} className="text-xs leading-6 text-gray-300 w-full text-center">
-                    {i + 1}
-                  </div>
+            {/* Body: line numbers + textarea */}
+            <div className={s.inputBody}>
+              <div className={s.lineNumbers}>
+                {displayLines.slice(0, 40).map((_, i) => (
+                  <div key={i} className={s.lineNum}>{i + 1}</div>
                 ))}
               </div>
-
               <textarea
-                className="w-full pl-14 pr-5 py-4 font-mono text-sm text-gray-800
-                           placeholder-gray-300 focus:outline-none resize-none
-                           leading-6"
-                style={{
-                  background:  "var(--bg)",
-                  minHeight:   "280px",
-                  caretColor:  "var(--brand)",
-                }}
+                className={s.textarea}
                 placeholder={PLACEHOLDER}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
               />
             </div>
 
             {/* Bottom bar */}
-            <div className="flex items-center justify-between px-5 py-3 border-t"
-              style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-              <div className="flex items-center gap-4 text-xs text-gray-400">
-                <span>Supports CSV, tab or space separated</span>
-                <span className="hidden sm:inline">Max 100 rows</span>
-                <span className="hidden sm:inline">
-                  <kbd className="px-1.5 py-0.5 rounded text-[11px] font-medium
-                                  bg-white border border-gray-200 text-gray-500 shadow-sm">
-                    ⌘ Enter
-                  </kbd>
-                  {" "}to search
+            <div className={s.inputBoxBottom}>
+              <div className={s.inputHints}>
+                <span>CSV, tab or space separated</span>
+                <span>Max 100 rows</span>
+                <span>
+                  <kbd className={s.kbd}>⌘ Enter</kbd> to search
                 </span>
               </div>
               <button
-                className="btn-primary"
+                className={s.btnPrimary}
                 onClick={handleSearch}
                 disabled={loading || input.trim().length === 0}
               >
-                {loading
-                  ? <><span className="spinner" /> Searching…</>
-                  : <>Find best prices <span className="ml-1 opacity-60 text-base">→</span></>
-                }
+                {loading ? (
+                  <><span className={s.spinner} /> Searching…</>
+                ) : (
+                  <>Find best prices →</>
+                )}
               </button>
             </div>
           </div>
 
           {/* Error */}
-          {error && (
-            <p className="mt-3 text-sm text-red-500 px-1 fade-up">{error}</p>
-          )}
+          {error && <p className={s.error}>{error}</p>}
 
-          {/* Format hint */}
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Format hints */}
+          <div className={s.formatHints}>
             {[
-              { label: "MPN + Quantity",       example: "LM358N 100",        note: "space separated" },
-              { label: "Distributor code",      example: "512-LM358N 100",    note: "auto-resolved to MPN" },
-              { label: "CSV / tab format",      example: "LM358N,100",        note: "comma or tab" },
+              { label: "MPN + Quantity",    example: "LM358N 100",     note: "space separated" },
+              { label: "Distributor code",  example: "512-LM358N 100", note: "auto-resolved to MPN" },
+              { label: "CSV / tab format",  example: "LM358N,100",     note: "comma or tab" },
             ].map(h => (
-              <div key={h.label}
-                className="rounded-xl border px-4 py-3"
-                style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-                <p className="text-xs font-semibold text-gray-500 mb-1">{h.label}</p>
-                <p className="font-mono text-sm text-gray-800">{h.example}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{h.note}</p>
+              <div key={h.label} className={s.formatCard}>
+                <div className={s.formatCardLabel}>{h.label}</div>
+                <div className={s.formatCardExample}>{h.example}</div>
+                <div className={s.formatCardNote}>{h.note}</div>
               </div>
             ))}
           </div>
@@ -184,14 +156,10 @@ export default function HomePage() {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t py-5 px-6" style={{ borderColor: "var(--border)" }}>
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <span className="text-xs text-gray-400">
-            © {new Date().getFullYear()} icpaste.com
-          </span>
-          <span className="text-xs text-gray-400">
-            Built for hardware buyers
-          </span>
+      <footer className={s.footer}>
+        <div className={s.footerInner}>
+          <span className={s.footerText}>© {new Date().getFullYear()} icpaste.com</span>
+          <span className={s.footerText}>Built for hardware buyers</span>
         </div>
       </footer>
 
