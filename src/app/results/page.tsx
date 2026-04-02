@@ -5,17 +5,17 @@ import { useSearchParams, useRouter }    from "next/navigation";
 import { SearchResponse, OptimizedResult } from "@/lib/types";
 
 // ── Distributor styles ────────────────────────────────────────────────────────
-const DIST_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
-  "Mouser":          { bg: "rgba(56,112,248,0.15)",  text: "#93c5fd", dot: "#3b82f6" },
-  "Mouser (Mock)":   { bg: "rgba(56,112,248,0.15)",  text: "#93c5fd", dot: "#3b82f6" },
-  "Digi-Key":        { bg: "rgba(250,204,21,0.12)",  text: "#fde68a", dot: "#f59e0b" },
-  "Digi-Key (Mock)": { bg: "rgba(250,204,21,0.12)",  text: "#fde68a", dot: "#f59e0b" },
-  "Farnell":         { bg: "rgba(34,197,94,0.12)",   text: "#86efac", dot: "#22c55e" },
-  "Farnell (Mock)":  { bg: "rgba(34,197,94,0.12)",   text: "#86efac", dot: "#22c55e" },
+const DIST_STYLE: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+  "Mouser":          { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe", dot: "#3b82f6" },
+  "Mouser (Mock)":   { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe", dot: "#3b82f6" },
+  "Digi-Key":        { bg: "#fffbeb", text: "#b45309", border: "#fde68a", dot: "#f59e0b" },
+  "Digi-Key (Mock)": { bg: "#fffbeb", text: "#b45309", border: "#fde68a", dot: "#f59e0b" },
+  "Farnell":         { bg: "#f0fdf4", text: "#15803d", border: "#bbf7d0", dot: "#22c55e" },
+  "Farnell (Mock)":  { bg: "#f0fdf4", text: "#15803d", border: "#bbf7d0", dot: "#22c55e" },
 };
 
-function distStyle(name: string) {
-  return DIST_STYLE[name] ?? { bg: "rgba(255,255,255,0.06)", text: "#94a3b8", dot: "#64748b" };
+function ds(name: string) {
+  return DIST_STYLE[name] ?? { bg: "#f9fafb", text: "#374151", border: "#e5e7eb", dot: "#9ca3af" };
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -26,64 +26,77 @@ const ArrowLeft = () => (
 );
 
 const ExternalLink = () => (
-  <svg className="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
       d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
   </svg>
 );
 
-const AlertCircle = () => (
-  <svg className="w-3.5 h-3.5 mr-1.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ label, value, sub, accent }: {
+  label: string; value: string; sub?: string; accent?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border px-5 py-4"
+      style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
+        {label}
+      </p>
+      <p className={`text-2xl font-bold tabular-nums ${accent ? "text-sky-500" : "text-gray-900"}`}>
+        {value}
+      </p>
+      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    </div>
+  );
+}
 
 // ── Result Row ────────────────────────────────────────────────────────────────
-function ResultRow({ r, index }: { r: OptimizedResult; index: number }) {
+function ResultRow({ r }: { r: OptimizedResult }) {
   const hasError    = Boolean(r.error);
   const wasResolved = Boolean(r.originalCode && r.originalCode !== r.mpn);
-  const ds          = distStyle(r.distributor);
+  const style       = ds(r.distributor);
 
   return (
-    <tr className="results-table-row" style={{ animationDelay: `${index * 30}ms` }}>
+    <tr className="border-b transition-colors duration-100 hover:bg-gray-50"
+      style={{ borderColor: "var(--border)" }}>
 
       {/* MPN */}
-      <td className="py-3.5 px-4">
-        <div className="flex flex-col gap-0.5">
-          <span className="font-mono text-sm font-medium text-slate-100">{r.mpn}</span>
+      <td className="py-3.5 px-5">
+        <div>
+          <span className="font-mono text-sm font-medium text-gray-900">{r.mpn}</span>
           {wasResolved && (
-            <span className="text-[10px] font-medium"
-              style={{ color: "rgba(167,139,250,0.8)" }}>
-              ↑ {r.originalCode}
-            </span>
+            <div className="mt-0.5">
+              <span className="text-[10px] font-medium text-violet-500 bg-violet-50
+                               border border-violet-200 px-1.5 py-0.5 rounded-full">
+                ↑ {r.originalCode}
+              </span>
+            </div>
           )}
         </div>
       </td>
 
       {/* Description */}
-      <td className="py-3.5 px-4 hidden lg:table-cell max-w-[200px]">
-        <span className="text-xs truncate block" style={{ color: "var(--text-3)" }}>
-          {r.description || "—"}
-        </span>
+      <td className="py-3.5 px-5 hidden lg:table-cell max-w-[220px]">
+        <span className="text-xs text-gray-400 truncate block">{r.description || "—"}</span>
       </td>
 
       {/* Requested */}
-      <td className="py-3.5 px-4 text-right">
-        <span className="text-sm tabular-nums" style={{ color: "var(--text-2)" }}>
+      <td className="py-3.5 px-5 text-right">
+        <span className="text-sm tabular-nums text-gray-500">
           {r.requestedQty.toLocaleString()}
         </span>
       </td>
 
       {/* Buy qty */}
-      <td className="py-3.5 px-4 text-right">
-        <div className="flex items-center justify-end gap-1.5">
-          <span className={`text-sm font-medium tabular-nums ${r.rounded ? "text-amber-400" : "text-slate-200"}`}>
+      <td className="py-3.5 px-5 text-right">
+        <div className="inline-flex items-center gap-1.5 justify-end">
+          <span className={`text-sm font-semibold tabular-nums
+            ${r.rounded ? "text-amber-600" : "text-gray-900"}`}>
             {r.optimalQty.toLocaleString()}
           </span>
           {r.rounded && (
-            <span className="tag text-[9px] font-semibold"
-              style={{ background: "rgba(251,191,36,0.12)", color: "#fbbf24" }}>
+            <span className="text-[9px] font-bold text-amber-600 bg-amber-50
+                             border border-amber-200 px-1.5 py-0.5 rounded-full">
               ADJ
             </span>
           )}
@@ -91,62 +104,44 @@ function ResultRow({ r, index }: { r: OptimizedResult; index: number }) {
       </td>
 
       {/* Unit price */}
-      <td className="py-3.5 px-4 text-right hidden sm:table-cell">
-        <span className="text-sm tabular-nums" style={{ color: "var(--text-2)" }}>
+      <td className="py-3.5 px-5 text-right hidden sm:table-cell">
+        <span className="text-sm tabular-nums text-gray-500">
           {hasError ? "—" : `${r.currency} ${r.unitPrice.toFixed(4)}`}
         </span>
       </td>
 
       {/* Total */}
-      <td className="py-3.5 px-4 text-right">
-        <span className="text-sm font-semibold tabular-nums text-slate-100">
+      <td className="py-3.5 px-5 text-right">
+        <span className="text-sm font-bold tabular-nums text-gray-900">
           {hasError ? "—" : `${r.currency} ${r.totalPrice.toFixed(2)}`}
         </span>
       </td>
 
-      {/* Best deal / error */}
-      <td className="py-3.5 px-4 text-right">
+      {/* Best deal */}
+      <td className="py-3.5 px-5 text-right">
         {hasError ? (
-          <span className="inline-flex items-center text-xs text-red-400">
-            <AlertCircle /> Not found
+          <span className="text-xs text-red-500 bg-red-50 border border-red-200
+                           px-2.5 py-1 rounded-full font-medium">
+            Not found
           </span>
         ) : (
           <a
             href={r.productUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center tag text-xs font-semibold
+            className="inline-flex items-center text-xs font-semibold
+                       px-3 py-1.5 rounded-full border
                        hover:opacity-80 transition-opacity"
-            style={{ background: ds.bg, color: ds.text }}
+            style={{ background: style.bg, color: style.text, borderColor: style.border }}
           >
             <span className="w-1.5 h-1.5 rounded-full mr-1.5 flex-shrink-0"
-              style={{ background: ds.dot }} />
+              style={{ background: style.dot }} />
             {r.distributor}
             <ExternalLink />
           </a>
         )}
       </td>
     </tr>
-  );
-}
-
-// ── Stat Card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent }: {
-  label: string; value: string; sub?: string; accent?: boolean
-}) {
-  return (
-    <div className="card px-5 py-4">
-      <p className="text-xs font-semibold uppercase tracking-widest mb-2"
-        style={{ color: "var(--text-3)" }}>
-        {label}
-      </p>
-      <p className={`text-2xl font-bold tabular-nums ${accent ? "text-sky-400" : "text-slate-100"}`}>
-        {value}
-      </p>
-      {sub && (
-        <p className="text-xs mt-1" style={{ color: "var(--text-3)" }}>{sub}</p>
-      )}
-    </div>
   );
 }
 
@@ -183,17 +178,23 @@ function ResultsContent() {
   // ── Loading ──
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-5">
-        <div className="relative">
-          <div className="w-12 h-12 rounded-full"
-            style={{ background: "var(--brand-dim)" }} />
-          <div className="absolute inset-0 spinner" style={{ width: 48, height: 48 }} />
-        </div>
-        <div className="text-center">
-          <p className="text-slate-300 font-medium mb-1">Searching distributors</p>
-          <p className="text-sm" style={{ color: "var(--text-3)" }}>
-            Checking Mouser, Digi-Key and Farnell…
-          </p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6"
+        style={{ background: "var(--bg)" }}>
+        <div className="flex flex-col items-center gap-4">
+          {/* Animated dots */}
+          <div className="flex items-center gap-2">
+            {["Mouser", "Digi-Key", "Farnell"].map((d, i) => (
+              <div key={d} className="flex items-center gap-1.5 text-xs font-medium
+                                      text-gray-400 bg-gray-50 border border-gray-200
+                                      px-3 py-1.5 rounded-full"
+                style={{ animationDelay: `${i * 150}ms` }}>
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-300
+                                 animate-pulse" />
+                {d}
+              </div>
+            ))}
+          </div>
+          <p className="text-gray-400 text-sm">Searching distributors…</p>
         </div>
       </div>
     );
@@ -202,9 +203,11 @@ function ResultsContent() {
   // ── Error ──
   if (apiError) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <div className="card px-8 py-6 text-center max-w-sm">
-          <p className="text-red-400 font-medium mb-4">{apiError}</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4"
+        style={{ background: "var(--bg)" }}>
+        <div className="rounded-2xl border px-8 py-6 text-center max-w-sm"
+          style={{ borderColor: "var(--border)" }}>
+          <p className="text-red-500 font-medium mb-4">{apiError}</p>
           <button className="btn-primary" onClick={() => router.push("/")}>
             ← Back to search
           </button>
@@ -219,43 +222,39 @@ function ResultsContent() {
   const notFound = data.results.filter(r => r.error);
   const resolved = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
 
-  // Distributor breakdown
   const distCount = found.reduce((acc, r) => {
     acc[r.distributor] = (acc[r.distributor] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
   return (
-    <main className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
 
-      {/* ── Top bar ── */}
-      <header className="sticky top-0 z-20 border-b backdrop-blur-md"
-        style={{
-          borderColor: "var(--border)",
-          background:  "rgba(17,17,19,0.85)",
-        }}>
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-20 border-b bg-white/90 backdrop-blur-md"
+        style={{ borderColor: "var(--border)" }}>
+        <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
             <button className="btn-ghost" onClick={() => router.push("/")}>
               <ArrowLeft /> New search
             </button>
-            <div className="hidden sm:block w-px h-4"
-              style={{ background: "var(--border)" }} />
-            <span className="hidden sm:block text-sm font-bold">
-              ic<span className="text-sky-400">paste</span>
+            <div className="w-px h-4 bg-gray-200" />
+            <span className="text-sm font-bold text-gray-900">
+              ic<span className="text-sky-500">paste</span>
             </span>
           </div>
 
-          {/* Distributor breakdown pills */}
+          {/* Distributor breakdown */}
           <div className="flex items-center gap-2 flex-wrap">
             {Object.entries(distCount).map(([dist, count]) => {
-              const ds = distStyle(dist);
+              const s = ds(dist);
               return (
                 <span key={dist}
-                  className="tag text-xs font-medium"
-                  style={{ background: ds.bg, color: ds.text }}>
+                  className="inline-flex items-center text-xs font-medium
+                             px-2.5 py-1 rounded-full border"
+                  style={{ background: s.bg, color: s.text, borderColor: s.border }}>
                   <span className="w-1.5 h-1.5 rounded-full mr-1.5"
-                    style={{ background: ds.dot }} />
+                    style={{ background: s.dot }} />
                   {dist} · {count}
                 </span>
               );
@@ -264,9 +263,10 @@ function ResultsContent() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* ── Content ── */}
+      <main className="flex-1 max-w-6xl mx-auto w-full px-5 py-8">
 
-        {/* ── Stats row ── */}
+        {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 fade-up">
           <StatCard
             label="BOM Total"
@@ -275,9 +275,9 @@ function ResultsContent() {
             accent
           />
           <StatCard
-            label="Components"
+            label="Found"
             value={`${found.length} / ${data.results.length}`}
-            sub="found with stock"
+            sub="components with stock"
           />
           {resolved.length > 0 && (
             <StatCard
@@ -295,73 +295,81 @@ function ResultsContent() {
           )}
         </div>
 
-        {/* ── Auto-resolve notice ── */}
+        {/* Auto-resolve notice */}
         {resolved.length > 0 && (
-          <div className="mb-4 px-4 py-3 rounded-lg text-sm fade-up"
+          <div className="mb-4 px-4 py-3 rounded-xl text-sm border fade-up"
             style={{
-              background:   "rgba(167,139,250,0.08)",
-              border:       "1px solid rgba(167,139,250,0.2)",
-              color:        "rgba(196,181,253,0.9)",
+              background:   "#faf5ff",
+              borderColor:  "#e9d5ff",
+              color:        "#7c3aed",
             }}>
-            <span className="font-semibold">✦ Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}</span>
+            <span className="font-semibold">
+              Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}
+            </span>
             {" "}— order codes were automatically converted to manufacturer part numbers.
           </div>
         )}
 
-        {/* ── Results table ── */}
-        <div className="card overflow-hidden fade-up">
+        {/* Table */}
+        <div className="rounded-2xl border overflow-hidden fade-up"
+          style={{ borderColor: "var(--border)" }}>
           <div className="overflow-x-auto">
-            <table className="w-full results-table">
+            <table className="w-full">
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                  <th className="py-3 px-4 text-left text-xs font-semibold uppercase tracking-widest"
-                    style={{ color: "var(--text-3)" }}>MPN</th>
-                  <th className="py-3 px-4 text-left text-xs font-semibold uppercase tracking-widest hidden lg:table-cell"
-                    style={{ color: "var(--text-3)" }}>Description</th>
-                  <th className="py-3 px-4 text-right text-xs font-semibold uppercase tracking-widest"
-                    style={{ color: "var(--text-3)" }}>Req.</th>
-                  <th className="py-3 px-4 text-right text-xs font-semibold uppercase tracking-widest"
-                    style={{ color: "var(--text-3)" }}>Buy Qty</th>
-                  <th className="py-3 px-4 text-right text-xs font-semibold uppercase tracking-widest hidden sm:table-cell"
-                    style={{ color: "var(--text-3)" }}>Unit Price</th>
-                  <th className="py-3 px-4 text-right text-xs font-semibold uppercase tracking-widest"
-                    style={{ color: "var(--text-3)" }}>Total</th>
-                  <th className="py-3 px-4 text-right text-xs font-semibold uppercase tracking-widest"
-                    style={{ color: "var(--text-3)" }}>Best Deal</th>
+                <tr className="border-b"
+                  style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+                  {[
+                    { label: "MPN",         align: "left",   hide: "" },
+                    { label: "Description", align: "left",   hide: "hidden lg:table-cell" },
+                    { label: "Requested",   align: "right",  hide: "" },
+                    { label: "Buy Qty",     align: "right",  hide: "" },
+                    { label: "Unit Price",  align: "right",  hide: "hidden sm:table-cell" },
+                    { label: "Total",       align: "right",  hide: "" },
+                    { label: "Best Deal",   align: "right",  hide: "" },
+                  ].map(h => (
+                    <th key={h.label}
+                      className={`py-3 px-5 text-xs font-semibold uppercase tracking-widest
+                                  text-gray-400 ${h.hide}
+                                  ${h.align === "right" ? "text-right" : "text-left"}`}>
+                      {h.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {data.results.map((r, i) => (
-                  <ResultRow key={r.originalCode ?? r.mpn} r={r} index={i} />
+                {data.results.map(r => (
+                  <ResultRow key={r.originalCode ?? r.mpn} r={r} />
                 ))}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* ── Legend ── */}
-        <div className="flex flex-wrap items-center gap-5 mt-4 text-xs"
-          style={{ color: "var(--text-3)" }}>
+        {/* Legend */}
+        <div className="flex flex-wrap items-center gap-5 mt-4 text-xs text-gray-400">
           <span className="flex items-center gap-1.5">
-            <span className="tag text-[9px] font-semibold"
-              style={{ background: "rgba(251,191,36,0.12)", color: "#fbbf24" }}>ADJ</span>
+            <span className="text-[9px] font-bold text-amber-600 bg-amber-50
+                             border border-amber-200 px-1.5 py-0.5 rounded-full">ADJ</span>
             Qty rounded to nearest package unit
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-violet-400" />
-            Distributor code auto-resolved
+            Distributor code auto-resolved to MPN
           </span>
           <span>Prices are indicative — verify on distributor site before ordering</span>
         </div>
 
-        {/* ── Footer ── */}
-        <footer className="mt-12 pt-6 border-t flex items-center justify-between text-xs"
-          style={{ borderColor: "var(--border)", color: "var(--text-3)" }}>
-          <span>© {new Date().getFullYear()} icpaste.com</span>
-          <span>Built for hardware buyers</span>
-        </footer>
-      </div>
-    </main>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t py-5 px-6" style={{ borderColor: "var(--border)" }}>
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <span className="text-xs text-gray-400">© {new Date().getFullYear()} icpaste.com</span>
+          <span className="text-xs text-gray-400">Built for hardware buyers</span>
+        </div>
+      </footer>
+
+    </div>
   );
 }
 
