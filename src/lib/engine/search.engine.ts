@@ -1,17 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Search Engine v6
-//  Usa smartOptimizeQty per trovare la combinazione qty+prezzo ottimale
+//  icpaste.com — Search Engine v6 (TypeScript fix)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { distributors }          from "../adapters";
-import { smartOptimizeQty }      from "./qty.optimizer";
-import { BomRow }                from "../utils/bom-parser";
+import { distributors }           from "../adapters";
+import { smartOptimizeQty }       from "./qty.optimizer";
+import { BomRow }                 from "../utils/bom-parser";
 import { resolveDistributorCode } from "../utils/code-resolver";
 import {
   OptimizedResult,
   SearchResponse,
   StockFallback,
   PartResult,
+  AdjustmentType,
 } from "../types";
 
 export async function searchBom(bom: BomRow[]): Promise<SearchResponse> {
@@ -29,6 +29,19 @@ export async function searchBom(bom: BomRow[]): Promise<SearchResponse> {
     currency:   "USD",
     searchedAt: new Date().toISOString(),
   };
+}
+
+// ── Tipo interno ──────────────────────────────────────────────────────────────
+interface ScoredResult {
+  part:            PartResult;
+  optimalQty:      number;
+  unitPrice:       number;
+  totalPrice:      number;
+  feasible:        boolean;
+  adjustment:      AdjustmentType;
+  packageRounded:  boolean;
+  priceStepUsed:   boolean;
+  savedVsOriginal: number;
 }
 
 async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
@@ -59,18 +72,8 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
   }
 
   // ── Per ogni risultato applica smartOptimizeQty ───────────────────────────
-  interface ScoredResult {
-    part:        PartResult;
-    optimalQty:  number;
-    unitPrice:   number;
-    totalPrice:  number;
-    feasible:    boolean;
-    adjustment:  import("../types").AdjustmentType;
-    savedVsOriginal: number;
-  }
-
   const scored: ScoredResult[] = allResults
-    .map(part => {
+    .map((part: PartResult): ScoredResult | null => {
       const opt = smartOptimizeQty(
         qty,
         part.packageUnit,
@@ -78,9 +81,19 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
         part.priceTiers
       );
       if (opt.unitPrice === 0) return null;
-      return { part, ...opt };
+      return {
+        part,
+        optimalQty:      opt.optimalQty,
+        unitPrice:       opt.unitPrice,
+        totalPrice:      opt.totalPrice,
+        feasible:        opt.feasible,
+        adjustment:      opt.adjustment,
+        packageRounded:  opt.packageRounded,
+        priceStepUsed:   opt.priceStepUsed,
+        savedVsOriginal: opt.savedVsOriginal,
+      };
     })
-    .filter((c): c is ScoredResult => c !== null);
+    .filter((c): c is ScoredResult => c !== null); // ← type guard corretto
 
   if (scored.length === 0) {
     return noResult(mpn, rawCode, qty, description, resolvedNote,
@@ -95,33 +108,23 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
   if (withStock.length > 0) {
     withStock.sort((a, b) => a.totalPrice - b.totalPrice);
     const w = withStock[0];
-    return {
-      mpn:             w.part.mpn,
-      originalCode:    detection.isDistributorCode ? rawCode : undefined,
-      description:     description || w.part.description,
-      requestedQty:    qty,
-      optimalQty:      w.optimalQty,
-      rounded:         w.adjustment !== "none",
-      adjustment:      w.adjustment,
-      savedVsOriginal: w.savedVsOriginal,
-      unitPrice:       w.unitPrice,
-      totalPrice:      w.totalPrice,
-      currency:        w.part.currency,
-      distributor:     w.part.distributor,
-      stock:           w.part.stock,
-      productUrl:      w.part.productUrl,
-      resolvedNote,
-    };
+    return buildResult(w, qty, detection.isDistributorCode ? rawCode : undefined,
+      description, resolvedNote);
   }
 
   // ── Case B: nessuno ha stock → mostra il più economico + fallback ─────────
+  if (withoutStock.length === 0) {
+    return noResult(mpn, rawCode, qty, description, resolvedNote,
+      "No pricing data available");
+  }
+
   withoutStock.sort((a, b) => a.totalPrice - b.totalPrice);
   const cheapest = withoutStock[0];
 
   // Cerca fallback tra chi ha stock parziale
-  const partialStock = allResults
-    .filter(p => p.stock > 0)
-    .map(part => {
+  const partialStock: ScoredResult[] = allResults
+    .map((part: PartResult): ScoredResult | null => {
+      if (part.stock <= 0) return null;
       const opt = smartOptimizeQty(
         Math.min(qty, part.stock),
         part.packageUnit,
@@ -129,7 +132,17 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
         part.priceTiers
       );
       if (opt.unitPrice === 0) return null;
-      return { part, ...opt };
+      return {
+        part,
+        optimalQty:      opt.optimalQty,
+        unitPrice:       opt.unitPrice,
+        totalPrice:      opt.totalPrice,
+        feasible:        opt.feasible,
+        adjustment:      opt.adjustment,
+        packageRounded:  opt.packageRounded,
+        priceStepUsed:   opt.priceStepUsed,
+        savedVsOriginal: opt.savedVsOriginal,
+      };
     })
     .filter((c): c is ScoredResult => c !== null)
     .sort((a, b) => a.totalPrice - b.totalPrice);
@@ -150,33 +163,47 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
   }
 
   return {
-    mpn:             cheapest.part.mpn,
-    originalCode:    detection.isDistributorCode ? rawCode : undefined,
-    description:     description || cheapest.part.description,
-    requestedQty:    qty,
-    optimalQty:      cheapest.optimalQty,
-    rounded:         cheapest.adjustment !== "none",
-    adjustment:      cheapest.adjustment,
-    savedVsOriginal: cheapest.savedVsOriginal,
-    unitPrice:       cheapest.unitPrice,
-    totalPrice:      cheapest.totalPrice,
-    currency:        cheapest.part.currency,
-    distributor:     cheapest.part.distributor,
-    stock:           cheapest.part.stock,
-    productUrl:      cheapest.part.productUrl,
-    resolvedNote,
-    error:           "Out of stock",
+    ...buildResult(cheapest, qty, detection.isDistributorCode ? rawCode : undefined,
+      description, resolvedNote),
+    error:         "Out of stock",
     stockFallback,
   };
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function buildResult(
+  c:            ScoredResult,
+  requestedQty: number,
+  originalCode: string | undefined,
+  description:  string,
+  resolvedNote: string | undefined
+): OptimizedResult {
+  return {
+    mpn:             c.part.mpn,
+    originalCode,
+    description:     description || c.part.description,
+    requestedQty,
+    optimalQty:      c.optimalQty,
+    rounded:         c.adjustment !== "none",
+    adjustment:      c.adjustment,
+    savedVsOriginal: c.savedVsOriginal,
+    unitPrice:       c.unitPrice,
+    totalPrice:      c.totalPrice,
+    currency:        c.part.currency,
+    distributor:     c.part.distributor,
+    stock:           c.part.stock,
+    productUrl:      c.part.productUrl,
+    resolvedNote,
+  };
+}
+
 function noResult(
-  mpn: string,
-  rawCode: string,
-  qty: number,
-  description: string,
+  mpn:          string,
+  rawCode:      string,
+  qty:          number,
+  description:  string,
   resolvedNote: string | undefined,
-  errorMsg: string
+  errorMsg:     string
 ): OptimizedResult {
   return {
     mpn,
