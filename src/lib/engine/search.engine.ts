@@ -1,18 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Search Engine v5
-//
-//  BUG FIX: il prezzo mostrato era calcolato sulla qty richiesta anche per
-//  i risultati senza stock. Ora:
-//  - candidati CON stock  → prezzo calcolato su optimalQty reale
-//  - candidati SENZA stock → esclusi dalla selezione principale
-//  - ordinamento separato: prima filtra withStock, poi ordina per prezzo
+//  icpaste.com — Search Engine v6
+//  Usa smartOptimizeQty per trovare la combinazione qty+prezzo ottimale
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { distributors }                    from "../adapters";
-import { optimizeQty }                     from "./qty.optimizer";
-import { getBestUnitPrice, getTotalPrice } from "./price.calculator";
-import { BomRow }                          from "../utils/bom-parser";
-import { resolveDistributorCode }          from "../utils/code-resolver";
+import { distributors }          from "../adapters";
+import { smartOptimizeQty }      from "./qty.optimizer";
+import { BomRow }                from "../utils/bom-parser";
+import { resolveDistributorCode } from "../utils/code-resolver";
 import {
   OptimizedResult,
   SearchResponse,
@@ -64,121 +58,89 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
       "No results found across all distributors");
   }
 
-  // ── Separa subito: con stock vs senza stock ───────────────────────────────
-  // Il BUG era qui: prima si mescolavano tutti i candidati, si calcolava
-  // il prezzo con qty sbagliata per quelli senza stock, poi si filtrava.
-  // Ora si separano PRIMA e si calcola il prezzo corretto per ognuno.
-
+  // ── Per ogni risultato applica smartOptimizeQty ───────────────────────────
   interface ScoredResult {
-    result:     OptimizedResult;
-    totalPrice: number;
+    part:        PartResult;
+    optimalQty:  number;
+    unitPrice:   number;
+    totalPrice:  number;
+    feasible:    boolean;
+    adjustment:  import("../types").AdjustmentType;
+    savedVsOriginal: number;
   }
 
-  const withStock:    ScoredResult[] = [];
-  const withoutStock: ScoredResult[] = [];
+  const scored: ScoredResult[] = allResults
+    .map(part => {
+      const opt = smartOptimizeQty(
+        qty,
+        part.packageUnit,
+        part.stock,
+        part.priceTiers
+      );
+      if (opt.unitPrice === 0) return null;
+      return { part, ...opt };
+    })
+    .filter((c): c is ScoredResult => c !== null);
 
-  for (const part of allResults) {
-    const { optimalQty, rounded, feasible } = optimizeQty(
-      qty, part.packageUnit, part.stock
-    );
-
-    if (feasible) {
-      // ── Ha stock sufficiente: calcola prezzo sulla optimalQty reale ──────
-      const unitPrice  = getBestUnitPrice(part.priceTiers, optimalQty);
-      const totalPrice = getTotalPrice(part.priceTiers, optimalQty);
-
-      if (unitPrice === 0) continue;
-
-      withStock.push({
-        totalPrice,
-        result: {
-          mpn:          part.mpn,
-          originalCode: detection.isDistributorCode ? rawCode : undefined,
-          description:  description || part.description,
-          requestedQty: qty,
-          optimalQty,           // ← qty reale arrotondata al package unit
-          rounded,
-          unitPrice,            // ← prezzo corretto per optimalQty
-          totalPrice,
-          currency:     part.currency,
-          distributor:  part.distributor,
-          stock:        part.stock,
-          productUrl:   part.productUrl,
-          resolvedNote,
-        },
-      });
-
-    } else {
-      // ── Non ha stock sufficiente: calcola prezzo sulla qty richiesta ─────
-      // (usato solo per il fallback, non mostrato come vincitore)
-      const unitPrice  = getBestUnitPrice(part.priceTiers, qty);
-      const totalPrice = getTotalPrice(part.priceTiers, qty);
-
-      if (unitPrice === 0) continue;
-
-      withoutStock.push({
-        totalPrice,
-        result: {
-          mpn:          part.mpn,
-          originalCode: detection.isDistributorCode ? rawCode : undefined,
-          description:  description || part.description,
-          requestedQty: qty,
-          optimalQty:   qty,
-          rounded:      false,
-          unitPrice,
-          totalPrice,
-          currency:     part.currency,
-          distributor:  part.distributor,
-          stock:        part.stock,
-          productUrl:   part.productUrl,
-          resolvedNote,
-        },
-      });
-    }
-  }
-
-  // ── Case A: almeno un distributore ha stock → prendi il più economico ────
-  if (withStock.length > 0) {
-    withStock.sort((a, b) => a.totalPrice - b.totalPrice);
-    return withStock[0].result;
-  }
-
-  // ── Case B: nessuno ha stock sufficiente ─────────────────────────────────
-  if (withoutStock.length === 0) {
+  if (scored.length === 0) {
     return noResult(mpn, rawCode, qty, description, resolvedNote,
       "No pricing data available");
   }
 
-  // Mostra il più economico (senza stock) come risultato principale
-  withoutStock.sort((a, b) => a.totalPrice - b.totalPrice);
-  const cheapestNoStock = withoutStock[0].result;
+  // ── Separa con stock vs senza stock ──────────────────────────────────────
+  const withStock    = scored.filter(c => c.feasible);
+  const withoutStock = scored.filter(c => !c.feasible);
 
-  // ── Cerca il fallback: distributore con stock parziale al prezzo più basso
-  const partialStockCandidates = allResults
+  // ── Case A: almeno un distributore ha stock → più economico ──────────────
+  if (withStock.length > 0) {
+    withStock.sort((a, b) => a.totalPrice - b.totalPrice);
+    const w = withStock[0];
+    return {
+      mpn:             w.part.mpn,
+      originalCode:    detection.isDistributorCode ? rawCode : undefined,
+      description:     description || w.part.description,
+      requestedQty:    qty,
+      optimalQty:      w.optimalQty,
+      rounded:         w.adjustment !== "none",
+      adjustment:      w.adjustment,
+      savedVsOriginal: w.savedVsOriginal,
+      unitPrice:       w.unitPrice,
+      totalPrice:      w.totalPrice,
+      currency:        w.part.currency,
+      distributor:     w.part.distributor,
+      stock:           w.part.stock,
+      productUrl:      w.part.productUrl,
+      resolvedNote,
+    };
+  }
+
+  // ── Case B: nessuno ha stock → mostra il più economico + fallback ─────────
+  withoutStock.sort((a, b) => a.totalPrice - b.totalPrice);
+  const cheapest = withoutStock[0];
+
+  // Cerca fallback tra chi ha stock parziale
+  const partialStock = allResults
     .filter(p => p.stock > 0)
     .map(part => {
-      // Usa lo stock disponibile anche se minore della qty richiesta
-      const availableQty = Math.min(
-        Math.ceil(qty / (part.packageUnit || 1)) * (part.packageUnit || 1),
-        part.stock
+      const opt = smartOptimizeQty(
+        Math.min(qty, part.stock),
+        part.packageUnit,
+        part.stock,
+        part.priceTiers
       );
-      const unitPrice  = getBestUnitPrice(part.priceTiers, availableQty);
-      const totalPrice = getTotalPrice(part.priceTiers, availableQty);
-      if (unitPrice === 0) return null;
-      const { rounded } = optimizeQty(qty, part.packageUnit, part.stock);
-      return { part, availableQty, rounded, unitPrice, totalPrice };
+      if (opt.unitPrice === 0) return null;
+      return { part, ...opt };
     })
-    .filter((c): c is NonNullable<typeof c> => c !== null)
+    .filter((c): c is ScoredResult => c !== null)
     .sort((a, b) => a.totalPrice - b.totalPrice);
 
   let stockFallback: StockFallback | undefined;
-
-  if (partialStockCandidates.length > 0) {
-    const fb = partialStockCandidates[0];
+  if (partialStock.length > 0) {
+    const fb = partialStock[0];
     stockFallback = {
       distributor: fb.part.distributor,
-      optimalQty:  fb.availableQty,
-      rounded:     fb.rounded,
+      optimalQty:  fb.optimalQty,
+      rounded:     fb.adjustment !== "none",
       unitPrice:   fb.unitPrice,
       totalPrice:  fb.totalPrice,
       currency:    fb.part.currency,
@@ -188,13 +150,26 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
   }
 
   return {
-    ...cheapestNoStock,
-    error: "Out of stock",
+    mpn:             cheapest.part.mpn,
+    originalCode:    detection.isDistributorCode ? rawCode : undefined,
+    description:     description || cheapest.part.description,
+    requestedQty:    qty,
+    optimalQty:      cheapest.optimalQty,
+    rounded:         cheapest.adjustment !== "none",
+    adjustment:      cheapest.adjustment,
+    savedVsOriginal: cheapest.savedVsOriginal,
+    unitPrice:       cheapest.unitPrice,
+    totalPrice:      cheapest.totalPrice,
+    currency:        cheapest.part.currency,
+    distributor:     cheapest.part.distributor,
+    stock:           cheapest.part.stock,
+    productUrl:      cheapest.part.productUrl,
+    resolvedNote,
+    error:           "Out of stock",
     stockFallback,
   };
 }
 
-// ── Helper ────────────────────────────────────────────────────────────────────
 function noResult(
   mpn: string,
   rawCode: string,
@@ -205,18 +180,20 @@ function noResult(
 ): OptimizedResult {
   return {
     mpn,
-    originalCode:  rawCode !== mpn ? rawCode : undefined,
+    originalCode:    rawCode !== mpn ? rawCode : undefined,
     description,
-    requestedQty:  qty,
-    optimalQty:    qty,
-    rounded:       false,
-    unitPrice:     0,
-    totalPrice:    0,
-    currency:      "USD",
-    distributor:   "—",
-    stock:         0,
-    productUrl:    "",
+    requestedQty:    qty,
+    optimalQty:      qty,
+    rounded:         false,
+    adjustment:      "none",
+    savedVsOriginal: 0,
+    unitPrice:       0,
+    totalPrice:      0,
+    currency:        "USD",
+    distributor:     "—",
+    stock:           0,
+    productUrl:      "",
     resolvedNote,
-    error:         errorMsg,
+    error:           errorMsg,
   };
 }
