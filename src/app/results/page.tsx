@@ -19,22 +19,43 @@ function ds(name: string) {
   return DIST[name] ?? { bg: "#f9fafb", color: "#374151", border: "#e5e7eb", dot: "#9ca3af" };
 }
 
-// ── Adjustment Badge ──────────────────────────────────────────────────────────
-function AdjBadge({ type, saved }: { type: AdjustmentType; saved: number }) {
-  if (type === "none") return null;
+// ── Badge Config ──────────────────────────────────────────────────────────────
+const BADGE_CONFIG: Record<string, {
+  label: string; bg: string; color: string; border: string;
+  title: string; detail: (req: number, opt: number) => string;
+}> = {
+  package: {
+    label:  "PKG",
+    bg:     "#fffbeb", color: "#d97706", border: "#fde68a",
+    title:  "Package unit adjusted",
+    detail: (req, opt) => `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  rounded to reel / tray size`,
+  },
+  pricestep: {
+    label:  "STEP",
+    bg:     "#f0fdf4", color: "#15803d", border: "#bbf7d0",
+    title:  "Better price tier",
+    detail: (req, opt) => `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  cheaper price break reached`,
+  },
+  both: {
+    label:  "PKG+STEP",
+    bg:     "#faf5ff", color: "#7c3aed", border: "#e9d5ff",
+    title:  "Package + price tier",
+    detail: (req, opt) => `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  package unit and price break`,
+  },
+};
 
-  const configs = {
-    package:   { label: "PKG",  title: "Rounded to nearest package unit (reel/tray)", bg: "#fffbeb", color: "#d97706", border: "#fde68a" },
-    pricestep: { label: "STEP", title: "Increased qty to reach a better price tier",  bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
-    both:      { label: "PKG+STEP", title: "Rounded to package unit AND better price tier", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff" },
-  };
-
-  const cfg = configs[type];
+// ── Adj Badge with Tooltip ────────────────────────────────────────────────────
+function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
+  type: AdjustmentType; saved: number;
+  requestedQty: number; optimalQty: number; currency: string;
+}) {
+  if (type === "none" || !BADGE_CONFIG[type]) return null;
+  const cfg = BADGE_CONFIG[type];
 
   return (
-    <span
-      title={`${cfg.title}${saved > 0 ? ` — saves $${saved.toFixed(2)}` : ""}`}
-      style={{
+    <span className={s.badgeWrapper}>
+      {/* Badge pill */}
+      <span style={{
         display:      "inline-block",
         fontSize:     "9px",
         fontWeight:   700,
@@ -43,23 +64,37 @@ function AdjBadge({ type, saved }: { type: AdjustmentType; saved: number }) {
         border:       `1px solid ${cfg.border}`,
         padding:      "1px 6px",
         borderRadius: "99px",
-        marginLeft:   "6px",
         fontFamily:   "Inter, sans-serif",
-        verticalAlign: "middle",
         cursor:       "help",
-      }}
-    >
-      {cfg.label}
-      {saved > 0 && <span style={{ marginLeft: 3, opacity: 0.8 }}>-${saved.toFixed(2)}</span>}
+        userSelect:   "none",
+        lineHeight:   "16px",
+      }}>
+        {cfg.label}
+      </span>
+
+      {/* Tooltip */}
+      <span className={s.tooltip}>
+        <span className={s.tooltipInner}>
+          <span style={{ display:"block", fontWeight:600, marginBottom:3 }}>
+            {cfg.title}
+          </span>
+          <span style={{ display:"block", color:"#94a3b8", fontSize:10 }}>
+            {cfg.detail(requestedQty, optimalQty)}
+          </span>
+          {saved > 0 && (
+            <span className={s.tooltipSaving}>
+              saves {currency} {saved.toFixed(2)}
+            </span>
+          )}
+        </span>
+        <span className={s.tooltipArrow} />
+      </span>
     </span>
   );
 }
 
 // ── Result Row ────────────────────────────────────────────────────────────────
-function ResultRow({
-  r,
-  onResolve,
-}: {
+function ResultRow({ r, onResolve }: {
   r: OptimizedResult;
   onResolve: (mpn: string) => void;
 }) {
@@ -70,7 +105,7 @@ function ResultRow({
   const hasFallback  = Boolean(r.stockFallback);
 
   return (
-    <tr className={s.tr} style={isOutOfStock ? { background: "#fffbeb" } : undefined}>
+    <tr className={s.tr} style={isOutOfStock ? { background:"#fffbeb" } : undefined}>
 
       {/* MPN */}
       <td className={s.td}>
@@ -81,7 +116,7 @@ function ResultRow({
       </td>
 
       {/* Description */}
-      <td className={`${s.td} ${s.desc}`} style={{ maxWidth: 180 }}>
+      <td className={`${s.td} ${s.desc}`} style={{ maxWidth:180 }}>
         <span style={{ display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
           {r.description || "—"}
         </span>
@@ -94,17 +129,23 @@ function ResultRow({
         </span>
       </td>
 
-      {/* Buy qty + adjustment badge */}
+      {/* Buy qty + badge */}
       <td className={`${s.td} ${s.tdRight}`}>
         {isNotFound ? "—" : (
-          <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"flex-end", gap:4 }}>
+          <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"flex-end", gap:5 }}>
             <span
               className={r.adjustment !== "none" ? s.qtyAdjusted : s.qtyNormal}
               style={{ fontVariantNumeric:"tabular-nums" }}
             >
               {r.optimalQty.toLocaleString()}
             </span>
-            <AdjBadge type={r.adjustment ?? "none"} saved={r.savedVsOriginal ?? 0} />
+            <AdjBadge
+              type={r.adjustment ?? "none"}
+              saved={r.savedVsOriginal ?? 0}
+              requestedQty={r.requestedQty}
+              optimalQty={r.optimalQty}
+              currency={r.currency}
+            />
           </span>
         )}
       </td>
@@ -159,8 +200,8 @@ function ResultRow({
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, accent, style }: {
-  label: string; value: string; sub?: string; accent?: boolean;
-  style?: React.CSSProperties;
+  label: string; value: string; sub?: string;
+  accent?: boolean; style?: React.CSSProperties;
 }) {
   return (
     <div className={s.statCard} style={style}>
@@ -200,7 +241,7 @@ function ResultsContent() {
       .finally(() => setLoading(false));
   }, [params, router]);
 
-  // ── Resolve: swap out-of-stock con fallback ───────────────────────────────
+  // ── Resolve handler ───────────────────────────────────────────────────────
   function handleResolve(mpn: string) {
     if (!data) return;
     const updatedResults = data.results.map(r => {
@@ -228,6 +269,7 @@ function ResultsContent() {
     setData({ ...data, results: updatedResults, totalBom: newTotal });
   }
 
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className={s.loading}>
@@ -244,6 +286,7 @@ function ResultsContent() {
     );
   }
 
+  // ── Error ─────────────────────────────────────────────────────────────────
   if (apiError) {
     return (
       <div className={s.loading}>
@@ -260,8 +303,6 @@ function ResultsContent() {
   const notFound   = data.results.filter(r => r.error && r.error !== "Out of stock");
   const resolved   = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
   const adjusted   = data.results.filter(r => r.adjustment && r.adjustment !== "none");
-
-  // Risparmio totale grazie all'ottimizzazione
   const totalSaved = parseFloat(
     data.results.reduce((sum, r) => sum + (r.savedVsOriginal ?? 0), 0).toFixed(2)
   );
@@ -274,7 +315,7 @@ function ResultsContent() {
   return (
     <div className={s.page}>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <header className={s.header}>
         <div className={s.headerInner}>
           <div className={s.headerLeft}>
@@ -299,7 +340,7 @@ function ResultsContent() {
 
       <main className={s.main}>
 
-        {/* Stats */}
+        {/* ── Stats ── */}
         <div className={s.stats}>
           <StatCard
             label="BOM Total"
@@ -329,25 +370,31 @@ function ResultsContent() {
             />
           )}
           {notFound.length > 0 && (
-            <StatCard label="Not found" value={`${notFound.length}`} sub="check MPN manually" />
+            <StatCard
+              label="Not found"
+              value={`${notFound.length}`}
+              sub="check MPN manually"
+            />
           )}
         </div>
 
-        {/* Notices */}
+        {/* ── Notices ── */}
         {outOfStock.length > 0 && (
-          <div className={s.notice} style={{ background:"#fffbeb", borderColor:"#fde68a", color:"#92400e" }}>
+          <div className={s.notice}
+            style={{ background:"#fffbeb", borderColor:"#fde68a", color:"#92400e" }}>
             <strong>⚠ {outOfStock.length} component{outOfStock.length > 1 ? "s" : ""} out of stock.</strong>
             {" "}Click <strong>Resolve</strong> to instantly switch to the next best available option.
           </div>
         )}
         {resolved.length > 0 && (
-          <div className={s.notice} style={{ background:"#faf5ff", borderColor:"#e9d5ff", color:"#7c3aed" }}>
+          <div className={s.notice}
+            style={{ background:"#faf5ff", borderColor:"#e9d5ff", color:"#7c3aed" }}>
             <strong>Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}.</strong>
             {" "}Order codes were automatically converted to manufacturer part numbers.
           </div>
         )}
 
-        {/* Table */}
+        {/* ── Table ── */}
         <div className={s.tableWrap}>
           <div className={s.tableScroll}>
             <table className={s.table}>
@@ -364,44 +411,48 @@ function ResultsContent() {
               </thead>
               <tbody>
                 {data.results.map(r => (
-                  <ResultRow key={r.originalCode ?? r.mpn} r={r} onResolve={handleResolve} />
+                  <ResultRow
+                    key={r.originalCode ?? r.mpn}
+                    r={r}
+                    onResolve={handleResolve}
+                  />
                 ))}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Legend */}
+        {/* ── Legend ── */}
         <div className={s.legend}>
-          <span>
-            <span style={{ display:"inline-block", fontSize:"9px", fontWeight:700, color:"#d97706",
-              background:"#fffbeb", border:"1px solid #fde68a", padding:"1px 6px",
-              borderRadius:"99px", marginRight:5, fontFamily:"Inter, sans-serif" }}>PKG</span>
-            Rounded to package unit
+          {[
+            { label:"PKG",      bg:"#fffbeb", color:"#d97706", border:"#fde68a", text:"Rounded to package unit" },
+            { label:"STEP",     bg:"#f0fdf4", color:"#15803d", border:"#bbf7d0", text:"Increased to better price tier" },
+            { label:"PKG+STEP", bg:"#faf5ff", color:"#7c3aed", border:"#e9d5ff", text:"Both applied" },
+          ].map(l => (
+            <span key={l.label} style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+              <span style={{
+                fontSize:"9px", fontWeight:700, color:l.color, background:l.bg,
+                border:`1px solid ${l.border}`, padding:"1px 6px",
+                borderRadius:"99px", fontFamily:"Inter, sans-serif",
+              }}>{l.label}</span>
+              {l.text}
+            </span>
+          ))}
+          <span style={{ marginLeft:"auto", color:"var(--text-3)" }}>
+            Hover badge for details
           </span>
-          <span>
-            <span style={{ display:"inline-block", fontSize:"9px", fontWeight:700, color:"#15803d",
-              background:"#f0fdf4", border:"1px solid #bbf7d0", padding:"1px 6px",
-              borderRadius:"99px", marginRight:5, fontFamily:"Inter, sans-serif" }}>STEP</span>
-            Increased to better price tier
-          </span>
-          <span>
-            <span style={{ display:"inline-block", fontSize:"9px", fontWeight:700, color:"#7c3aed",
-              background:"#faf5ff", border:"1px solid #e9d5ff", padding:"1px 6px",
-              borderRadius:"99px", marginRight:5, fontFamily:"Inter, sans-serif" }}>PKG+STEP</span>
-            Both applied
-          </span>
-          <span style={{ marginLeft:"auto" }}>Hover badge to see savings detail</span>
         </div>
 
       </main>
 
+      {/* ── Footer ── */}
       <footer className={s.footer}>
         <div className={s.footerInner}>
           <span className={s.footerText}>© {new Date().getFullYear()} icpaste.com</span>
           <span className={s.footerText}>Built for hardware buyers</span>
         </div>
       </footer>
+
     </div>
   );
 }
