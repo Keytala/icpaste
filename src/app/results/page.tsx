@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter }    from "next/navigation";
-import { SearchResponse, OptimizedResult } from "@/lib/types";
+import { SearchResponse, OptimizedResult, AdjustmentType } from "@/lib/types";
 import s from "./Results.module.css";
 
 // ── Distributor styles ────────────────────────────────────────────────────────
@@ -17,6 +17,42 @@ const DIST: Record<string, { bg: string; color: string; border: string; dot: str
 
 function ds(name: string) {
   return DIST[name] ?? { bg: "#f9fafb", color: "#374151", border: "#e5e7eb", dot: "#9ca3af" };
+}
+
+// ── Adjustment Badge ──────────────────────────────────────────────────────────
+function AdjBadge({ type, saved }: { type: AdjustmentType; saved: number }) {
+  if (type === "none") return null;
+
+  const configs = {
+    package:   { label: "PKG",  title: "Rounded to nearest package unit (reel/tray)", bg: "#fffbeb", color: "#d97706", border: "#fde68a" },
+    pricestep: { label: "STEP", title: "Increased qty to reach a better price tier",  bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
+    both:      { label: "PKG+STEP", title: "Rounded to package unit AND better price tier", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff" },
+  };
+
+  const cfg = configs[type];
+
+  return (
+    <span
+      title={`${cfg.title}${saved > 0 ? ` — saves $${saved.toFixed(2)}` : ""}`}
+      style={{
+        display:      "inline-block",
+        fontSize:     "9px",
+        fontWeight:   700,
+        color:        cfg.color,
+        background:   cfg.bg,
+        border:       `1px solid ${cfg.border}`,
+        padding:      "1px 6px",
+        borderRadius: "99px",
+        marginLeft:   "6px",
+        fontFamily:   "Inter, sans-serif",
+        verticalAlign: "middle",
+        cursor:       "help",
+      }}
+    >
+      {cfg.label}
+      {saved > 0 && <span style={{ marginLeft: 3, opacity: 0.8 }}>-${saved.toFixed(2)}</span>}
+    </span>
+  );
 }
 
 // ── Result Row ────────────────────────────────────────────────────────────────
@@ -58,16 +94,18 @@ function ResultRow({
         </span>
       </td>
 
-      {/* Buy qty */}
+      {/* Buy qty + adjustment badge */}
       <td className={`${s.td} ${s.tdRight}`}>
         {isNotFound ? "—" : (
-          <>
-            <span className={r.rounded ? s.qtyAdjusted : s.qtyNormal}
-              style={{ fontVariantNumeric:"tabular-nums" }}>
+          <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"flex-end", gap:4 }}>
+            <span
+              className={r.adjustment !== "none" ? s.qtyAdjusted : s.qtyNormal}
+              style={{ fontVariantNumeric:"tabular-nums" }}
+            >
               {r.optimalQty.toLocaleString()}
             </span>
-            {r.rounded && <span className={s.adjBadge}>ADJ</span>}
-          </>
+            <AdjBadge type={r.adjustment ?? "none"} saved={r.savedVsOriginal ?? 0} />
+          </span>
         )}
       </td>
 
@@ -85,31 +123,24 @@ function ResultRow({
         </span>
       </td>
 
-      {/* Best deal / status */}
+      {/* Best deal */}
       <td className={`${s.td} ${s.tdRight}`}>
         {isNotFound ? (
-          // ── Not found on any distributor ──
           <span className={s.notFound}>Not found</span>
-
         ) : isOutOfStock ? (
-          // ── Out of stock: show warning + optional Resolve button ──
           <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"flex-end", flexWrap:"wrap" }}>
-            <span className={s.outOfStock}>
-              ⚠ Out of stock
-            </span>
+            <span className={s.outOfStock}>⚠ Out of stock</span>
             {hasFallback && (
               <button
                 className={s.btnResolve}
                 onClick={() => onResolve(r.mpn)}
-                title={`Switch to ${r.stockFallback!.distributor} — ${r.stockFallback!.stock} in stock @ ${r.stockFallback!.currency} ${r.stockFallback!.unitPrice.toFixed(4)}/pz`}
+                title={`Switch to ${r.stockFallback!.distributor} — ${r.stockFallback!.stock.toLocaleString()} in stock @ ${r.stockFallback!.currency} ${r.stockFallback!.unitPrice.toFixed(4)}/pz`}
               >
                 Resolve ↗
               </button>
             )}
           </div>
-
         ) : (
-          // ── Normal: distributor link ──
           <a href={r.productUrl} target="_blank" rel="noopener noreferrer"
             className={s.distLink}
             style={{ background:style.bg, color:style.color, borderColor:style.border }}>
@@ -123,6 +154,20 @@ function ResultRow({
         )}
       </td>
     </tr>
+  );
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ label, value, sub, accent, style }: {
+  label: string; value: string; sub?: string; accent?: boolean;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div className={s.statCard} style={style}>
+      <div className={s.statLabel}>{label}</div>
+      <div className={`${s.statValue} ${accent ? s.statValueAccent : ""}`}>{value}</div>
+      {sub && <div className={s.statSub}>{sub}</div>}
+    </div>
   );
 }
 
@@ -155,40 +200,34 @@ function ResultsContent() {
       .finally(() => setLoading(false));
   }, [params, router]);
 
-  // ── Resolve handler: swap out-of-stock row with its stockFallback ─────────
+  // ── Resolve: swap out-of-stock con fallback ───────────────────────────────
   function handleResolve(mpn: string) {
     if (!data) return;
-
     const updatedResults = data.results.map(r => {
       if (r.mpn !== mpn || !r.stockFallback) return r;
-
       const fb = r.stockFallback;
-      const style = ds(fb.distributor);
-
-      // Swap the row with the fallback data
       return {
         ...r,
-        distributor:   fb.distributor,
-        optimalQty:    fb.optimalQty,
-        rounded:       fb.rounded,
-        unitPrice:     fb.unitPrice,
-        totalPrice:    fb.totalPrice,
-        currency:      fb.currency,
-        stock:         fb.stock,
-        productUrl:    fb.productUrl,
-        error:         undefined,       // clear error
-        stockFallback: undefined,       // clear fallback
+        distributor:     fb.distributor,
+        optimalQty:      fb.optimalQty,
+        rounded:         fb.rounded,
+        adjustment:      "none" as AdjustmentType,
+        savedVsOriginal: 0,
+        unitPrice:       fb.unitPrice,
+        totalPrice:      fb.totalPrice,
+        currency:        fb.currency,
+        stock:           fb.stock,
+        productUrl:      fb.productUrl,
+        error:           undefined,
+        stockFallback:   undefined,
       } as OptimizedResult;
     });
-
     const newTotal = parseFloat(
       updatedResults.reduce((sum, r) => sum + (r.totalPrice ?? 0), 0).toFixed(2)
     );
-
     setData({ ...data, results: updatedResults, totalBom: newTotal });
   }
 
-  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className={s.loading}>
@@ -220,6 +259,12 @@ function ResultsContent() {
   const outOfStock = data.results.filter(r => r.error === "Out of stock");
   const notFound   = data.results.filter(r => r.error && r.error !== "Out of stock");
   const resolved   = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
+  const adjusted   = data.results.filter(r => r.adjustment && r.adjustment !== "none");
+
+  // Risparmio totale grazie all'ottimizzazione
+  const totalSaved = parseFloat(
+    data.results.reduce((sum, r) => sum + (r.savedVsOriginal ?? 0), 0).toFixed(2)
+  );
 
   const distCount = found.reduce((acc, r) => {
     acc[r.distributor] = (acc[r.distributor] ?? 0) + 1;
@@ -233,13 +278,9 @@ function ResultsContent() {
       <header className={s.header}>
         <div className={s.headerInner}>
           <div className={s.headerLeft}>
-            <button className={s.btnBack} onClick={() => router.push("/")}>
-              ← New search
-            </button>
+            <button className={s.btnBack} onClick={() => router.push("/")}>← New search</button>
             <div className={s.divider} />
-            <span className={s.logo}>
-              ic<span className={s.logoAccent}>paste</span>
-            </span>
+            <span className={s.logo}>ic<span className={s.logoAccent}>paste</span></span>
           </div>
           <div className={s.distPills}>
             {Object.entries(distCount).map(([dist, count]) => {
@@ -260,53 +301,49 @@ function ResultsContent() {
 
         {/* Stats */}
         <div className={s.stats}>
-          <div className={s.statCard}>
-            <div className={s.statLabel}>BOM Total</div>
-            <div className={`${s.statValue} ${s.statValueAccent}`}>
-              {data.currency} {data.totalBom.toFixed(2)}
-            </div>
-            <div className={s.statSub}>estimated cost</div>
-          </div>
-          <div className={s.statCard}>
-            <div className={s.statLabel}>Found</div>
-            <div className={s.statValue}>{found.length} / {data.results.length}</div>
-            <div className={s.statSub}>components with stock</div>
-          </div>
+          <StatCard
+            label="BOM Total"
+            value={`${data.currency} ${data.totalBom.toFixed(2)}`}
+            sub="estimated cost"
+            accent
+          />
+          <StatCard
+            label="Found"
+            value={`${found.length} / ${data.results.length}`}
+            sub="components with stock"
+          />
+          {totalSaved > 0 && (
+            <StatCard
+              label="Optimized savings"
+              value={`$${totalSaved.toFixed(2)}`}
+              sub={`${adjusted.length} qty adjusted`}
+              style={{ borderColor:"#bbf7d0", background:"#f0fdf4" }}
+            />
+          )}
           {outOfStock.length > 0 && (
-            <div className={s.statCard} style={{ borderColor:"#fde68a", background:"#fffbeb" }}>
-              <div className={s.statLabel}>Out of stock</div>
-              <div className={s.statValue} style={{ color:"var(--amber)" }}>
-                {outOfStock.length}
-              </div>
-              <div className={s.statSub}>click Resolve to fix</div>
-            </div>
+            <StatCard
+              label="Out of stock"
+              value={`${outOfStock.length}`}
+              sub="click Resolve to fix"
+              style={{ borderColor:"#fde68a", background:"#fffbeb" }}
+            />
           )}
           {notFound.length > 0 && (
-            <div className={s.statCard}>
-              <div className={s.statLabel}>Not found</div>
-              <div className={s.statValue}>{notFound.length}</div>
-              <div className={s.statSub}>check MPN manually</div>
-            </div>
+            <StatCard label="Not found" value={`${notFound.length}`} sub="check MPN manually" />
           )}
         </div>
 
-        {/* Out of stock notice */}
+        {/* Notices */}
         {outOfStock.length > 0 && (
-          <div className={s.notice} style={{
-            background:"#fffbeb", borderColor:"#fde68a", color:"#92400e", marginBottom:12
-          }}>
+          <div className={s.notice} style={{ background:"#fffbeb", borderColor:"#fde68a", color:"#92400e" }}>
             <strong>⚠ {outOfStock.length} component{outOfStock.length > 1 ? "s" : ""} out of stock.</strong>
             {" "}Click <strong>Resolve</strong> to instantly switch to the next best available option.
           </div>
         )}
-
-        {/* Auto-resolve notice */}
         {resolved.length > 0 && (
-          <div className={s.notice} style={{
-            background:"var(--violet-light)", borderColor:"#e9d5ff", color:"var(--violet)"
-          }}>
-            <strong>Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}</strong>
-            {" "}— order codes were automatically converted to manufacturer part numbers.
+          <div className={s.notice} style={{ background:"#faf5ff", borderColor:"#e9d5ff", color:"#7c3aed" }}>
+            <strong>Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}.</strong>
+            {" "}Order codes were automatically converted to manufacturer part numbers.
           </div>
         )}
 
@@ -327,11 +364,7 @@ function ResultsContent() {
               </thead>
               <tbody>
                 {data.results.map(r => (
-                  <ResultRow
-                    key={r.originalCode ?? r.mpn}
-                    r={r}
-                    onResolve={handleResolve}
-                  />
+                  <ResultRow key={r.originalCode ?? r.mpn} r={r} onResolve={handleResolve} />
                 ))}
               </tbody>
             </table>
@@ -341,13 +374,24 @@ function ResultsContent() {
         {/* Legend */}
         <div className={s.legend}>
           <span>
-            <span className={s.adjBadge}>ADJ</span> Qty rounded to nearest package unit
+            <span style={{ display:"inline-block", fontSize:"9px", fontWeight:700, color:"#d97706",
+              background:"#fffbeb", border:"1px solid #fde68a", padding:"1px 6px",
+              borderRadius:"99px", marginRight:5, fontFamily:"Inter, sans-serif" }}>PKG</span>
+            Rounded to package unit
           </span>
           <span>
-            <span className={s.legendDot} style={{ background:"#a78bfa" }} />
-            Distributor code auto-resolved
+            <span style={{ display:"inline-block", fontSize:"9px", fontWeight:700, color:"#15803d",
+              background:"#f0fdf4", border:"1px solid #bbf7d0", padding:"1px 6px",
+              borderRadius:"99px", marginRight:5, fontFamily:"Inter, sans-serif" }}>STEP</span>
+            Increased to better price tier
           </span>
-          <span>Prices are indicative — verify on distributor site</span>
+          <span>
+            <span style={{ display:"inline-block", fontSize:"9px", fontWeight:700, color:"#7c3aed",
+              background:"#faf5ff", border:"1px solid #e9d5ff", padding:"1px 6px",
+              borderRadius:"99px", marginRight:5, fontFamily:"Inter, sans-serif" }}>PKG+STEP</span>
+            Both applied
+          </span>
+          <span style={{ marginLeft:"auto" }}>Hover badge to see savings detail</span>
         </div>
 
       </main>
@@ -363,9 +407,5 @@ function ResultsContent() {
 }
 
 export default function ResultsPage() {
-  return (
-    <Suspense>
-      <ResultsContent />
-    </Suspense>
-  );
+  return <Suspense><ResultsContent /></Suspense>;
 }
