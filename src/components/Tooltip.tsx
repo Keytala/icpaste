@@ -4,16 +4,16 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 
 interface TooltipProps {
-  children:  React.ReactNode;  // il badge
-  title:     string;
-  detail:    string;
-  saving?:   string;           // es. "saves USD 3.20"
+  children: React.ReactNode;
+  title:    string;
+  detail:   string;
+  saving?:  string;
 }
 
 export function Tooltip({ children, title, detail, saving }: TooltipProps) {
-  const [visible, setVisible]   = useState(false);
-  const [pos, setPos]           = useState({ top: 0, left: 0 });
-  const [mounted, setMounted]   = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos]         = useState({ top: 0, left: 0 });
+  const [mounted, setMounted] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -22,7 +22,7 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
     if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
     setPos({
-      top:  rect.top + window.scrollY - 8,   // sopra il badge
+      top:  rect.top + window.scrollY - 8,
       left: rect.left + rect.width / 2 + window.scrollX,
     });
     setVisible(true);
@@ -42,29 +42,34 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
     }}>
       {/* Box */}
       <div style={{
-        background:    "#1a1a1f",
-        color:         "#f1f5f9",
-        fontSize:      "11px",
-        fontFamily:    "Inter, sans-serif",
-        fontWeight:    500,
-        lineHeight:    1.65,
-        padding:       "8px 13px",
-        borderRadius:  "8px",
-        boxShadow:     "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.1)",
-        textAlign:     "center",
-        whiteSpace:    "nowrap",
+        background:   "#f9fafb",
+        color:        "#111827",
+        fontSize:     "11px",
+        fontFamily:   "Inter, sans-serif",
+        fontWeight:   500,
+        lineHeight:   1.65,
+        padding:      "8px 13px",
+        borderRadius: "8px",
+        border:       "1px solid #e5e7eb",
+        boxShadow:    "0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05)",
+        textAlign:    "center",
+        whiteSpace:   "nowrap",
       }}>
         {/* Titolo */}
-        <div style={{ fontWeight: 600, marginBottom: 2 }}>{title}</div>
+        <div style={{ fontWeight: 600, color: "#111827", marginBottom: 2 }}>
+          {title}
+        </div>
         {/* Dettaglio */}
-        <div style={{ color: "#64748b", fontSize: 10 }}>{detail}</div>
+        <div style={{ color: "#6b7280", fontSize: 10 }}>
+          {detail}
+        </div>
         {/* Risparmio */}
         {saving && (
           <div style={{
-            marginTop:   5,
-            fontWeight:  700,
-            fontSize:    12,
-            color:       "#4ade80",
+            marginTop:     5,
+            fontWeight:    700,
+            fontSize:      12,
+            color:         "#16a34a",
             letterSpacing: "-0.2px",
           }}>
             {saving}
@@ -81,7 +86,19 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
         height:      0,
         borderLeft:  "5px solid transparent",
         borderRight: "5px solid transparent",
-        borderTop:   "5px solid #1a1a1f",
+        borderTop:   "5px solid #e5e7eb",
+      }} />
+      {/* Freccia interna (per coprire il bordo) */}
+      <div style={{
+        position:    "absolute",
+        top:         "calc(100% - 1px)",
+        left:        "50%",
+        transform:   "translateX(-50%)",
+        width:       0,
+        height:      0,
+        borderLeft:  "4px solid transparent",
+        borderRight: "4px solid transparent",
+        borderTop:   "4px solid #f9fafb",
       }} />
     </div>,
     document.body
