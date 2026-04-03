@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   Home page styles — complete file
+   Home page styles — proporzioni ottimizzate
 ───────────────────────────────────────────────────────────── */
 
 .page {
@@ -15,10 +15,10 @@
 }
 
 .headerInner {
-  max-width: 900px;
+  max-width: 860px;
   margin: 0 auto;
   padding: 0 24px;
-  height: 56px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -35,15 +35,15 @@
 
 .betaBadge {
   display: inline-block;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   color: #0284c7;
   background: #e0f2fe;
   border: 1px solid #bae6fd;
-  padding: 1px 8px;
+  padding: 1px 7px;
   border-radius: 99px;
-  margin-left: 8px;
+  margin-left: 7px;
   vertical-align: middle;
   font-family: 'Inter', sans-serif;
 }
@@ -51,25 +51,25 @@
 .distPills {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .distPill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 11px;
   color: var(--text-2);
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 99px;
   font-family: 'Inter', sans-serif;
 }
 
 .distDot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--border-2);
 }
@@ -81,40 +81,39 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 40px 24px 48px;
 }
 
 .container {
   width: 100%;
-  max-width: 720px;
+  max-width: 680px;
 }
 
 /* ── Headline ── */
 .headline {
   text-align: center;
-  margin-bottom: 36px;
+  margin-bottom: 28px;
 }
 
 .title {
-  font-size: 42px;
+  font-size: 36px;
   font-weight: 700;
-  letter-spacing: -1px;
-  line-height: 1.15;
+  letter-spacing: -0.8px;
+  line-height: 1.2;
   color: var(--text-1);
   font-family: 'Inter', sans-serif;
-  margin: 0 0 14px;
+  margin: 0 0 10px;
 }
 
 .titleAccent { color: var(--brand); }
 
 .subtitle {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text-2);
-  line-height: 1.65;
+  line-height: 1.6;
   font-family: 'Inter', sans-serif;
-  margin: 0;
-  max-width: 520px;
   margin: 0 auto;
+  max-width: 480px;
 }
 
 /* ── Input box ── */
@@ -130,13 +129,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 8px 14px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
 .inputLabel {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -145,12 +144,12 @@
 }
 
 .componentCount {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #0284c7;
   background: #e0f2fe;
   border: 1px solid #bae6fd;
-  padding: 2px 10px;
+  padding: 1px 8px;
   border-radius: 99px;
   font-family: 'Inter', sans-serif;
 }
@@ -159,13 +158,13 @@
 .inputBody {
   display: flex;
   position: relative;
-  min-height: 280px;
+  min-height: 220px;
 }
 
 .lineNumbers {
-  width: 40px;
+  width: 36px;
   flex-shrink: 0;
-  padding: 16px 0;
+  padding: 12px 0;
   border-right: 1px solid var(--border);
   background: var(--surface);
   display: flex;
@@ -175,8 +174,8 @@
 }
 
 .lineNum {
-  font-size: 11px;
-  line-height: 24px;
+  font-size: 10px;
+  line-height: 22px;
   color: var(--text-4);
   font-family: 'JetBrains Mono', monospace;
   width: 100%;
@@ -185,16 +184,16 @@
 
 .textarea {
   flex: 1;
-  padding: 16px;
+  padding: 12px 14px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
-  line-height: 24px;
+  line-height: 22px;
   color: var(--text-1);
   background: var(--bg);
   border: none;
   outline: none;
   resize: none;
-  min-height: 280px;
+  min-height: 220px;
   caret-color: var(--brand);
 }
 
@@ -205,7 +204,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 8px 12px;
   background: var(--surface);
   border-top: 1px solid var(--border);
   gap: 12px;
@@ -214,7 +213,7 @@
 .inputHints {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   font-size: 11px;
   color: var(--text-3);
   font-family: 'Inter', sans-serif;
@@ -223,23 +222,23 @@
 
 .kbd {
   display: inline-block;
-  font-size: 11px;
+  font-size: 10px;
   font-family: 'Inter', sans-serif;
   background: white;
   border: 1px solid var(--border-2);
   border-radius: 4px;
-  padding: 1px 6px;
+  padding: 1px 5px;
   color: var(--text-2);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
-/* ── Primary button — fix hover ── */
+/* ── Primary button ── */
 .btnPrimary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 20px;
+  padding: 7px 16px;
   background: var(--brand);
   color: white;
   font-size: 13px;
@@ -250,15 +249,14 @@
   cursor: pointer;
   transition: background 0.15s, box-shadow 0.15s;
   white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(14,165,233,0.3);
+  box-shadow: 0 1px 3px rgba(14,165,233,0.25);
   flex-shrink: 0;
 }
 
-/* Hover: blu scuro, testo bianco sempre visibile */
 .btnPrimary:hover:not(:disabled) {
   background: var(--brand-dark);
-  box-shadow: 0 2px 8px rgba(14,165,233,0.35);
   color: white;
+  box-shadow: 0 2px 8px rgba(14,165,233,0.3);
 }
 
 .btnPrimary:active:not(:disabled) {
@@ -274,8 +272,8 @@
 /* ── Spinner ── */
 .spinner {
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border: 2px solid rgba(255,255,255,0.35);
   border-top-color: white;
   border-radius: 50%;
@@ -284,8 +282,8 @@
 
 /* ── Error ── */
 .error {
-  margin-top: 10px;
-  font-size: 13px;
+  margin-top: 8px;
+  font-size: 12px;
   color: var(--red);
   font-family: 'Inter', sans-serif;
   padding: 0 2px;
@@ -295,24 +293,24 @@
 .formatHints {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .formatCard {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 
 .formatCardLabel {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-3);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   font-family: 'Inter', sans-serif;
 }
 
@@ -320,11 +318,11 @@
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   color: var(--text-1);
-  margin-bottom: 3px;
+  margin-bottom: 2px;
 }
 
 .formatCardNote {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-3);
   font-family: 'Inter', sans-serif;
 }
@@ -332,11 +330,11 @@
 /* ── Footer ── */
 .footer {
   border-top: 1px solid var(--border);
-  padding: 16px 24px;
+  padding: 14px 24px;
 }
 
 .footerInner {
-  max-width: 900px;
+  max-width: 860px;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -344,15 +342,15 @@
 }
 
 .footerText {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-3);
   font-family: 'Inter', sans-serif;
 }
 
 /* ── Responsive ── */
 @media (max-width: 600px) {
-  .title        { font-size: 30px; }
-  .formatHints  { grid-template-columns: 1fr; }
-  .distPills    { display: none; }
+  .title       { font-size: 26px; }
+  .formatHints { grid-template-columns: 1fr; }
+  .distPills   { display: none; }
   .inputHints span:not(:first-child) { display: none; }
 }
