@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   Home page styles — proporzioni ottimizzate
+   Home page styles — layout bilanciato
 ───────────────────────────────────────────────────────────── */
 
 .page {
@@ -15,9 +15,9 @@
 }
 
 .headerInner {
-  max-width: 860px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 32px;
   height: 52px;
   display: flex;
   align-items: center;
@@ -62,7 +62,7 @@
   color: var(--text-2);
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: 99px;
   font-family: 'Inter', sans-serif;
 }
@@ -74,35 +74,35 @@
   background: var(--border-2);
 }
 
-/* ── Main ── */
+/* ── Main — centrato verticalmente con spazio simmetrico ── */
 .main {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 24px 48px;
+  padding: 32px 24px;
 }
 
 .container {
   width: 100%;
-  max-width: 680px;
+  max-width: 760px;
 }
 
 /* ── Headline ── */
 .headline {
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .title {
-  font-size: 36px;
+  font-size: 40px;
   font-weight: 700;
-  letter-spacing: -0.8px;
-  line-height: 1.2;
+  letter-spacing: -1px;
+  line-height: 1.15;
   color: var(--text-1);
   font-family: 'Inter', sans-serif;
-  margin: 0 0 10px;
+  margin: 0 0 12px;
 }
 
 .titleAccent { color: var(--brand); }
@@ -113,7 +113,7 @@
   line-height: 1.6;
   font-family: 'Inter', sans-serif;
   margin: 0 auto;
-  max-width: 480px;
+  max-width: 500px;
 }
 
 /* ── Input box ── */
@@ -129,7 +129,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 9px 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -158,13 +158,13 @@
 .inputBody {
   display: flex;
   position: relative;
-  min-height: 220px;
+  min-height: 260px;
 }
 
 .lineNumbers {
-  width: 36px;
+  width: 38px;
   flex-shrink: 0;
-  padding: 12px 0;
+  padding: 14px 0;
   border-right: 1px solid var(--border);
   background: var(--surface);
   display: flex;
@@ -174,7 +174,7 @@
 }
 
 .lineNum {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 22px;
   color: var(--text-4);
   font-family: 'JetBrains Mono', monospace;
@@ -184,7 +184,7 @@
 
 .textarea {
   flex: 1;
-  padding: 12px 14px;
+  padding: 14px 16px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
   line-height: 22px;
@@ -193,7 +193,7 @@
   border: none;
   outline: none;
   resize: none;
-  min-height: 220px;
+  min-height: 260px;
   caret-color: var(--brand);
 }
 
@@ -204,7 +204,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 9px 14px;
   background: var(--surface);
   border-top: 1px solid var(--border);
   gap: 12px;
@@ -238,7 +238,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 7px 16px;
+  padding: 7px 18px;
   background: var(--brand);
   color: white;
   font-size: 13px;
@@ -301,7 +301,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 10px 12px;
+  padding: 11px 14px;
 }
 
 .formatCardLabel {
@@ -327,15 +327,19 @@
   font-family: 'Inter', sans-serif;
 }
 
-/* ── Footer ── */
+/* ── Footer — simmetrico con header ── */
 .footer {
   border-top: 1px solid var(--border);
-  padding: 14px 24px;
+  padding: 0 32px;
+  height: 52px;
+  display: flex;
+  align-items: center;
 }
 
 .footerInner {
-  max-width: 860px;
+  max-width: 900px;
   margin: 0 auto;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -349,7 +353,7 @@
 
 /* ── Responsive ── */
 @media (max-width: 600px) {
-  .title       { font-size: 26px; }
+  .title       { font-size: 28px; }
   .formatHints { grid-template-columns: 1fr; }
   .distPills   { display: none; }
   .inputHints span:not(:first-child) { display: none; }
