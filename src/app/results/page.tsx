@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter }    from "next/navigation";
 import { SearchResponse, OptimizedResult, AdjustmentType } from "@/lib/types";
+import { Tooltip } from "@/components/Tooltip";
 import s from "./Results.module.css";
 
 // ── Distributor styles ────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ const BADGE_CONFIG: Record<string, {
   },
 };
 
-// ── Adj Badge with Tooltip ────────────────────────────────────────────────────
+// ── Adj Badge with Portal Tooltip ─────────────────────────────────────────────
 function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
   type:         AdjustmentType;
   saved:        number;
@@ -69,9 +70,11 @@ function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
   const cfg = BADGE_CONFIG[type];
 
   return (
-    <span className={s.badgeWrapper}>
-
-      {/* Badge pill */}
+    <Tooltip
+      title={cfg.title}
+      detail={cfg.detail(requestedQty, optimalQty)}
+      saving={saved > 0 ? `saves ${currency} ${saved.toFixed(2)}` : undefined}
+    >
       <span style={{
         display:      "inline-block",
         fontSize:     "9px",
@@ -88,24 +91,7 @@ function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
       }}>
         {cfg.label}
       </span>
-
-      {/* Tooltip — appare sopra il badge */}
-      <span className={s.tooltip}>
-        <span className={s.tooltipInner}>
-          <span className={s.tooltipTitle}>{cfg.title}</span>
-          <span className={s.tooltipDetail}>
-            {cfg.detail(requestedQty, optimalQty)}
-          </span>
-          {saved > 0 && (
-            <span className={s.tooltipSaving}>
-              saves {currency} {saved.toFixed(2)}
-            </span>
-          )}
-        </span>
-        <span className={s.tooltipArrow} />
-      </span>
-
-    </span>
+    </Tooltip>
   );
 }
 
@@ -405,7 +391,6 @@ function ResultsContent() {
             </span>
           </div>
 
-          {/* Distributor breakdown pills */}
           <div className={s.distPills}>
             {Object.entries(distCount).map(([dist, count]) => {
               const style = ds(dist);
