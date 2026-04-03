@@ -11,10 +11,11 @@ interface TooltipProps {
 }
 
 export function Tooltip({ children, title, detail, saving }: TooltipProps) {
-  const [visible, setVisible] = useState(false);
-  const [pos, setPos]         = useState({ top: 0, left: 0 });
-  const [mounted, setMounted] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
+  const [visible, setVisible]   = useState(false);
+  const [pos, setPos]           = useState({ top: 0, left: 0 });
+  const [mounted, setMounted]   = useState(false);
+  const ref                     = useRef<HTMLSpanElement>(null);
+  const tooltipRef              = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -22,9 +23,8 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
     if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
     setPos({
-      // position: fixed → coordinate viewport, NO scrollY needed
-      top:  rect.top - 10,
-      left: rect.left + rect.width / 2,
+      top:  rect.top,        // top del badge nel viewport
+      left: rect.left + rect.width / 2,  // centro orizzontale del badge
     });
     setVisible(true);
   }, []);
@@ -32,14 +32,19 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
   const hide = useCallback(() => setVisible(false), []);
 
   const tooltip = visible && mounted ? createPortal(
-    <div style={{
-      position:      "fixed",           // ← fixed, non absolute
-      top:           pos.top,
-      left:          pos.left,
-      transform:     "translate(-50%, -100%)",
-      zIndex:        99999,
-      pointerEvents: "none",
-    }}>
+    <div
+      ref={tooltipRef}
+      style={{
+        position:      "fixed",
+        top:           pos.top,
+        left:          pos.left,
+        // sposta il tooltip sopra il badge:
+        // -100% = altezza del tooltip, -8px = gap dal badge
+        transform:     "translate(-50%, calc(-100% - 8px))",
+        zIndex:        99999,
+        pointerEvents: "none",
+      }}
+    >
       {/* Box */}
       <div style={{
         background:   "#f9fafb",
@@ -55,15 +60,12 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
         textAlign:    "center",
         whiteSpace:   "nowrap",
       }}>
-        {/* Titolo */}
         <div style={{ fontWeight: 600, color: "#111827", marginBottom: 2 }}>
           {title}
         </div>
-        {/* Dettaglio */}
         <div style={{ color: "#6b7280", fontSize: 10 }}>
           {detail}
         </div>
-        {/* Risparmio */}
         {saving && (
           <div style={{
             marginTop:     5,
