@@ -22,8 +22,9 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
     if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
     setPos({
-      top:  rect.top + window.scrollY - 8,
-      left: rect.left + rect.width / 2 + window.scrollX,
+      // position: fixed → coordinate viewport, NO scrollY needed
+      top:  rect.top - 10,
+      left: rect.left + rect.width / 2,
     });
     setVisible(true);
   }, []);
@@ -32,13 +33,12 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
 
   const tooltip = visible && mounted ? createPortal(
     <div style={{
-      position:      "absolute",
+      position:      "fixed",           // ← fixed, non absolute
       top:           pos.top,
       left:          pos.left,
       transform:     "translate(-50%, -100%)",
       zIndex:        99999,
       pointerEvents: "none",
-      animation:     "fadeUpTooltip 0.15s ease forwards",
     }}>
       {/* Box */}
       <div style={{
