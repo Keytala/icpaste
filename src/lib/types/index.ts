@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Shared Types (v3)
+//  icpaste.com — Shared Types v4
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface PriceTier {
@@ -18,13 +18,17 @@ export interface PartResult {
   currency:     string;
 }
 
+export type AdjustmentType = "none" | "package" | "pricestep" | "both";
+
 export interface OptimizedResult {
   mpn:              string;
   originalCode?:    string;
   description:      string;
   requestedQty:     number;
   optimalQty:       number;
-  rounded:          boolean;
+  rounded:          boolean;        // backward compat
+  adjustment:       AdjustmentType; // tipo preciso di aggiustamento
+  savedVsOriginal:  number;         // risparmio in $ vs qty originale
   unitPrice:        number;
   totalPrice:       number;
   currency:         string;
@@ -33,10 +37,6 @@ export interface OptimizedResult {
   productUrl:       string;
   resolvedNote?:    string;
   error?:           string;
-
-  // ── Stock fallback ────────────────────────────────────────────────────────
-  // Populated when best price has no stock — contains the next best option
-  // with actual availability. User can "resolve" to swap to this.
   stockFallback?:   StockFallback;
 }
 
