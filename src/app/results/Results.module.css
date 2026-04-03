@@ -52,9 +52,16 @@
   transition: background 0.15s, color 0.15s;
   font-family: 'Inter', sans-serif;
 }
-.btnBack:hover { background: var(--surface); color: var(--text-1); }
+.btnBack:hover {
+  background: var(--surface);
+  color: var(--text-1);
+}
 
-.divider { width: 1px; height: 16px; background: var(--border); }
+.divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
 
 .logo {
   font-size: 15px;
@@ -62,6 +69,7 @@
   color: var(--text-1);
   font-family: 'Inter', sans-serif;
 }
+
 .logoAccent { color: var(--brand); }
 
 .distPills {
@@ -135,16 +143,24 @@
   animation: fadeUp 0.25s ease;
 }
 
-/* ── Table ── */
+/* ── Table wrapper — overflow visible per i tooltip ── */
 .tableWrap {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow-sm);
   animation: fadeUp 0.3s ease;
+  /* Bordi arrotondati visibili anche con overflow visible */
+  background: var(--bg);
 }
 
-.tableScroll { overflow-x: auto; }
+.tableScroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  border-radius: var(--radius-lg);
+  /* Bordo arrotondato sulla tabella */
+  clip-path: inset(0 round var(--radius-lg));
+}
 
 .table {
   width: 100%;
@@ -152,7 +168,9 @@
   font-family: 'Inter', sans-serif;
 }
 
-.thead { background: var(--surface); }
+.thead {
+  background: var(--surface);
+}
 
 .th {
   padding: 12px 18px;
@@ -180,6 +198,7 @@
   font-size: 13px;
   vertical-align: middle;
 }
+
 .tdRight { text-align: right; }
 
 /* ── MPN ── */
@@ -318,7 +337,11 @@
   background: var(--bg);
 }
 
-.loadingPills { display: flex; align-items: center; gap: 8px; }
+.loadingPills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 .loadingPill {
   display: inline-flex;
@@ -369,7 +392,12 @@
   font-family: 'Inter', sans-serif;
 }
 
-/* ── Tooltip ── */
+/* ── Tooltip ─────────────────────────────────────────────────
+   Il tooltip appare SOPRA il badge.
+   z-index alto per stare sopra la tabella.
+   overflow: visible su tableWrap e tableScroll è obbligatorio.
+───────────────────────────────────────────────────────────── */
+
 .badgeWrapper {
   position: relative;
   display: inline-flex;
@@ -378,12 +406,12 @@
 
 .tooltip {
   position:       absolute;
-  bottom:         calc(100% + 8px);
+  bottom:         calc(100% + 10px);
   left:           50%;
-  transform:      translateX(-50%) translateY(4px);
+  transform:      translateX(-50%) translateY(6px);
   white-space:    nowrap;
   pointer-events: none;
-  z-index:        50;
+  z-index:        9999;
   opacity:        0;
   visibility:     hidden;
   transition:     opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
@@ -401,21 +429,37 @@
   font-size:     11px;
   font-family:   'Inter', sans-serif;
   font-weight:   500;
-  line-height:   1.6;
-  padding:       8px 12px;
+  line-height:   1.65;
+  padding:       8px 13px;
   border-radius: 8px;
-  box-shadow:    0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08);
+  box-shadow:    0 8px 24px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.08);
   text-align:    center;
+}
+
+.tooltipTitle {
+  display:     block;
+  font-weight: 600;
+  font-size:   11px;
+  color:       #f1f5f9;
+  margin-bottom: 3px;
+}
+
+.tooltipDetail {
+  display:   block;
+  font-size: 10px;
+  color:     #64748b;
 }
 
 .tooltipSaving {
   display:     block;
-  margin-top:  4px;
+  margin-top:  5px;
   font-size:   12px;
   font-weight: 700;
   color:       #4ade80;
+  letter-spacing: -0.2px;
 }
 
+/* Freccia punta verso il basso (verso il badge) */
 .tooltipArrow {
   position:     absolute;
   top:          100%;
@@ -430,11 +474,11 @@
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
-  .stats { grid-template-columns: repeat(2, 1fr); }
-  .distPills { display: none; }
+  .stats      { grid-template-columns: repeat(2, 1fr); }
+  .distPills  { display: none; }
 }
 
 @media (max-width: 480px) {
-  .main { padding: 20px 16px; }
-  .stats { grid-template-columns: 1fr 1fr; }
+  .main   { padding: 20px 16px; }
+  .stats  { grid-template-columns: 1fr 1fr; }
 }
