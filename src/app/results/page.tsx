@@ -21,39 +21,56 @@ function ds(name: string) {
 
 // ── Badge Config ──────────────────────────────────────────────────────────────
 const BADGE_CONFIG: Record<string, {
-  label: string; bg: string; color: string; border: string;
-  title: string; detail: (req: number, opt: number) => string;
+  label:  string;
+  bg:     string;
+  color:  string;
+  border: string;
+  title:  string;
+  detail: (req: number, opt: number) => string;
 }> = {
   package: {
     label:  "PKG",
-    bg:     "#fffbeb", color: "#d97706", border: "#fde68a",
+    bg:     "#fffbeb",
+    color:  "#d97706",
+    border: "#fde68a",
     title:  "Package unit adjusted",
-    detail: (req, opt) => `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  rounded to reel / tray size`,
+    detail: (req, opt) =>
+      `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  rounded to reel / tray size`,
   },
   pricestep: {
     label:  "STEP",
-    bg:     "#f0fdf4", color: "#15803d", border: "#bbf7d0",
+    bg:     "#f0fdf4",
+    color:  "#15803d",
+    border: "#bbf7d0",
     title:  "Better price tier",
-    detail: (req, opt) => `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  cheaper price break reached`,
+    detail: (req, opt) =>
+      `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  cheaper price break reached`,
   },
   both: {
     label:  "PKG+STEP",
-    bg:     "#faf5ff", color: "#7c3aed", border: "#e9d5ff",
+    bg:     "#faf5ff",
+    color:  "#7c3aed",
+    border: "#e9d5ff",
     title:  "Package + price tier",
-    detail: (req, opt) => `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  package unit and price break`,
+    detail: (req, opt) =>
+      `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  package unit and price break`,
   },
 };
 
 // ── Adj Badge with Tooltip ────────────────────────────────────────────────────
 function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
-  type: AdjustmentType; saved: number;
-  requestedQty: number; optimalQty: number; currency: string;
+  type:         AdjustmentType;
+  saved:        number;
+  requestedQty: number;
+  optimalQty:   number;
+  currency:     string;
 }) {
   if (type === "none" || !BADGE_CONFIG[type]) return null;
   const cfg = BADGE_CONFIG[type];
 
   return (
     <span className={s.badgeWrapper}>
+
       {/* Badge pill */}
       <span style={{
         display:      "inline-block",
@@ -72,13 +89,11 @@ function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
         {cfg.label}
       </span>
 
-      {/* Tooltip */}
+      {/* Tooltip — appare sopra il badge */}
       <span className={s.tooltip}>
         <span className={s.tooltipInner}>
-          <span style={{ display:"block", fontWeight:600, marginBottom:3 }}>
-            {cfg.title}
-          </span>
-          <span style={{ display:"block", color:"#94a3b8", fontSize:10 }}>
+          <span className={s.tooltipTitle}>{cfg.title}</span>
+          <span className={s.tooltipDetail}>
             {cfg.detail(requestedQty, optimalQty)}
           </span>
           {saved > 0 && (
@@ -89,23 +104,27 @@ function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
         </span>
         <span className={s.tooltipArrow} />
       </span>
+
     </span>
   );
 }
 
 // ── Result Row ────────────────────────────────────────────────────────────────
 function ResultRow({ r, onResolve }: {
-  r: OptimizedResult;
+  r:         OptimizedResult;
   onResolve: (mpn: string) => void;
 }) {
   const isOutOfStock = r.error === "Out of stock";
-  const isNotFound   = r.error && r.error !== "Out of stock";
+  const isNotFound   = Boolean(r.error && r.error !== "Out of stock");
   const wasResolved  = Boolean(r.originalCode && r.originalCode !== r.mpn);
   const style        = ds(r.distributor);
   const hasFallback  = Boolean(r.stockFallback);
 
   return (
-    <tr className={s.tr} style={isOutOfStock ? { background:"#fffbeb" } : undefined}>
+    <tr
+      className={s.tr}
+      style={isOutOfStock ? { background: "#fffbeb" } : undefined}
+    >
 
       {/* MPN */}
       <td className={s.td}>
@@ -116,15 +135,20 @@ function ResultRow({ r, onResolve }: {
       </td>
 
       {/* Description */}
-      <td className={`${s.td} ${s.desc}`} style={{ maxWidth:180 }}>
-        <span style={{ display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+      <td className={`${s.td} ${s.desc}`} style={{ maxWidth: 180 }}>
+        <span style={{
+          display:      "block",
+          overflow:     "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace:   "nowrap",
+        }}>
           {r.description || "—"}
         </span>
       </td>
 
-      {/* Requested */}
+      {/* Requested qty */}
       <td className={`${s.td} ${s.tdRight}`}>
-        <span style={{ color:"var(--text-2)", fontVariantNumeric:"tabular-nums" }}>
+        <span style={{ color: "var(--text-2)", fontVariantNumeric: "tabular-nums" }}>
           {r.requestedQty.toLocaleString()}
         </span>
       </td>
@@ -132,10 +156,19 @@ function ResultRow({ r, onResolve }: {
       {/* Buy qty + badge */}
       <td className={`${s.td} ${s.tdRight}`}>
         {isNotFound ? "—" : (
-          <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"flex-end", gap:5 }}>
+          <span style={{
+            display:        "inline-flex",
+            alignItems:     "center",
+            justifyContent: "flex-end",
+            gap:            5,
+          }}>
             <span
-              className={r.adjustment !== "none" ? s.qtyAdjusted : s.qtyNormal}
-              style={{ fontVariantNumeric:"tabular-nums" }}
+              className={
+                r.adjustment && r.adjustment !== "none"
+                  ? s.qtyAdjusted
+                  : s.qtyNormal
+              }
+              style={{ fontVariantNumeric: "tabular-nums" }}
             >
               {r.optimalQty.toLocaleString()}
             </span>
@@ -152,14 +185,14 @@ function ResultRow({ r, onResolve }: {
 
       {/* Unit price */}
       <td className={`${s.td} ${s.tdRight} ${s.priceUnit}`}>
-        <span style={{ fontVariantNumeric:"tabular-nums" }}>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>
           {isNotFound ? "—" : `${r.currency} ${r.unitPrice.toFixed(4)}`}
         </span>
       </td>
 
       {/* Total */}
       <td className={`${s.td} ${s.tdRight} ${s.priceTotal}`}>
-        <span style={{ fontVariantNumeric:"tabular-nums" }}>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>
           {isNotFound ? "—" : `${r.currency} ${r.totalPrice.toFixed(2)}`}
         </span>
       </td>
@@ -168,24 +201,44 @@ function ResultRow({ r, onResolve }: {
       <td className={`${s.td} ${s.tdRight}`}>
         {isNotFound ? (
           <span className={s.notFound}>Not found</span>
+
         ) : isOutOfStock ? (
-          <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"flex-end", flexWrap:"wrap" }}>
+          <div style={{
+            display:        "flex",
+            alignItems:     "center",
+            gap:            6,
+            justifyContent: "flex-end",
+            flexWrap:       "wrap",
+          }}>
             <span className={s.outOfStock}>⚠ Out of stock</span>
             {hasFallback && (
               <button
                 className={s.btnResolve}
                 onClick={() => onResolve(r.mpn)}
-                title={`Switch to ${r.stockFallback!.distributor} — ${r.stockFallback!.stock.toLocaleString()} in stock @ ${r.stockFallback!.currency} ${r.stockFallback!.unitPrice.toFixed(4)}/pz`}
+                title={
+                  `Switch to ${r.stockFallback!.distributor} — ` +
+                  `${r.stockFallback!.stock.toLocaleString()} in stock @ ` +
+                  `${r.stockFallback!.currency} ${r.stockFallback!.unitPrice.toFixed(4)}/pz`
+                }
               >
                 Resolve ↗
               </button>
             )}
           </div>
+
         ) : (
-          <a href={r.productUrl} target="_blank" rel="noopener noreferrer"
+          <a
+            href={r.productUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className={s.distLink}
-            style={{ background:style.bg, color:style.color, borderColor:style.border }}>
-            <span className={s.distDot} style={{ background:style.dot }} />
+            style={{
+              background:  style.bg,
+              color:       style.color,
+              borderColor: style.border,
+            }}
+          >
+            <span className={s.distDot} style={{ background: style.dot }} />
             {r.distributor}
             <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
@@ -200,19 +253,24 @@ function ResultRow({ r, onResolve }: {
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, accent, style }: {
-  label: string; value: string; sub?: string;
-  accent?: boolean; style?: React.CSSProperties;
+  label:   string;
+  value:   string;
+  sub?:    string;
+  accent?: boolean;
+  style?:  React.CSSProperties;
 }) {
   return (
     <div className={s.statCard} style={style}>
       <div className={s.statLabel}>{label}</div>
-      <div className={`${s.statValue} ${accent ? s.statValueAccent : ""}`}>{value}</div>
+      <div className={`${s.statValue} ${accent ? s.statValueAccent : ""}`}>
+        {value}
+      </div>
       {sub && <div className={s.statSub}>{sub}</div>}
     </div>
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Main Component ────────────────────────────────────────────────────────────
 function ResultsContent() {
   const params  = useSearchParams();
   const router  = useRouter();
@@ -223,6 +281,7 @@ function ResultsContent() {
   useEffect(() => {
     const encoded = params.get("bom");
     if (!encoded) { router.push("/"); return; }
+
     let bom;
     try { bom = JSON.parse(atob(encoded)); }
     catch { router.push("/"); return; }
@@ -241,9 +300,10 @@ function ResultsContent() {
       .finally(() => setLoading(false));
   }, [params, router]);
 
-  // ── Resolve handler ───────────────────────────────────────────────────────
+  // ── Resolve: swap out-of-stock row with stockFallback ─────────────────────
   function handleResolve(mpn: string) {
     if (!data) return;
+
     const updatedResults = data.results.map(r => {
       if (r.mpn !== mpn || !r.stockFallback) return r;
       const fb = r.stockFallback;
@@ -263,9 +323,11 @@ function ResultsContent() {
         stockFallback:   undefined,
       } as OptimizedResult;
     });
+
     const newTotal = parseFloat(
       updatedResults.reduce((sum, r) => sum + (r.totalPrice ?? 0), 0).toFixed(2)
     );
+
     setData({ ...data, results: updatedResults, totalBom: newTotal });
   }
 
@@ -275,8 +337,15 @@ function ResultsContent() {
       <div className={s.loading}>
         <div className={s.loadingPills}>
           {["Mouser", "Digi-Key", "Farnell"].map((d, i) => (
-            <div key={d} className={s.loadingPill} style={{ animationDelay:`${i*150}ms` }}>
-              <span className={s.loadingDot} style={{ animationDelay:`${i*200}ms` }} />
+            <div
+              key={d}
+              className={s.loadingPill}
+              style={{ animationDelay: `${i * 150}ms` }}
+            >
+              <span
+                className={s.loadingDot}
+                style={{ animationDelay: `${i * 200}ms` }}
+              />
               {d}
             </div>
           ))}
@@ -286,25 +355,33 @@ function ResultsContent() {
     );
   }
 
-  // ── Error ─────────────────────────────────────────────────────────────────
+  // ── API Error ─────────────────────────────────────────────────────────────
   if (apiError) {
     return (
       <div className={s.loading}>
-        <p style={{ color:"var(--red)", fontFamily:"Inter, sans-serif" }}>{apiError}</p>
-        <button className={s.btnBack} onClick={() => router.push("/")}>← Back</button>
+        <p style={{ color: "var(--red)", fontFamily: "Inter, sans-serif" }}>
+          {apiError}
+        </p>
+        <button className={s.btnBack} onClick={() => router.push("/")}>
+          ← Back
+        </button>
       </div>
     );
   }
 
   if (!data) return null;
 
+  // ── Derived stats ─────────────────────────────────────────────────────────
   const found      = data.results.filter(r => !r.error);
   const outOfStock = data.results.filter(r => r.error === "Out of stock");
   const notFound   = data.results.filter(r => r.error && r.error !== "Out of stock");
   const resolved   = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
   const adjusted   = data.results.filter(r => r.adjustment && r.adjustment !== "none");
+
   const totalSaved = parseFloat(
-    data.results.reduce((sum, r) => sum + (r.savedVsOriginal ?? 0), 0).toFixed(2)
+    data.results
+      .reduce((sum, r) => sum + (r.savedVsOriginal ?? 0), 0)
+      .toFixed(2)
   );
 
   const distCount = found.reduce((acc, r) => {
@@ -319,17 +396,30 @@ function ResultsContent() {
       <header className={s.header}>
         <div className={s.headerInner}>
           <div className={s.headerLeft}>
-            <button className={s.btnBack} onClick={() => router.push("/")}>← New search</button>
+            <button className={s.btnBack} onClick={() => router.push("/")}>
+              ← New search
+            </button>
             <div className={s.divider} />
-            <span className={s.logo}>ic<span className={s.logoAccent}>paste</span></span>
+            <span className={s.logo}>
+              ic<span className={s.logoAccent}>paste</span>
+            </span>
           </div>
+
+          {/* Distributor breakdown pills */}
           <div className={s.distPills}>
             {Object.entries(distCount).map(([dist, count]) => {
               const style = ds(dist);
               return (
-                <span key={dist} className={s.distLink}
-                  style={{ background:style.bg, color:style.color, borderColor:style.border }}>
-                  <span className={s.distDot} style={{ background:style.dot }} />
+                <span
+                  key={dist}
+                  className={s.distLink}
+                  style={{
+                    background:  style.bg,
+                    color:       style.color,
+                    borderColor: style.border,
+                  }}
+                >
+                  <span className={s.distDot} style={{ background: style.dot }} />
                   {dist} · {count}
                 </span>
               );
@@ -358,7 +448,7 @@ function ResultsContent() {
               label="Optimized savings"
               value={`$${totalSaved.toFixed(2)}`}
               sub={`${adjusted.length} qty adjusted`}
-              style={{ borderColor:"#bbf7d0", background:"#f0fdf4" }}
+              style={{ borderColor: "#bbf7d0", background: "#f0fdf4" }}
             />
           )}
           {outOfStock.length > 0 && (
@@ -366,7 +456,7 @@ function ResultsContent() {
               label="Out of stock"
               value={`${outOfStock.length}`}
               sub="click Resolve to fix"
-              style={{ borderColor:"#fde68a", background:"#fffbeb" }}
+              style={{ borderColor: "#fde68a", background: "#fffbeb" }}
             />
           )}
           {notFound.length > 0 && (
@@ -380,16 +470,27 @@ function ResultsContent() {
 
         {/* ── Notices ── */}
         {outOfStock.length > 0 && (
-          <div className={s.notice}
-            style={{ background:"#fffbeb", borderColor:"#fde68a", color:"#92400e" }}>
-            <strong>⚠ {outOfStock.length} component{outOfStock.length > 1 ? "s" : ""} out of stock.</strong>
+          <div className={s.notice} style={{
+            background:  "#fffbeb",
+            borderColor: "#fde68a",
+            color:       "#92400e",
+          }}>
+            <strong>
+              ⚠ {outOfStock.length} component{outOfStock.length > 1 ? "s" : ""} out of stock.
+            </strong>
             {" "}Click <strong>Resolve</strong> to instantly switch to the next best available option.
           </div>
         )}
+
         {resolved.length > 0 && (
-          <div className={s.notice}
-            style={{ background:"#faf5ff", borderColor:"#e9d5ff", color:"#7c3aed" }}>
-            <strong>Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}.</strong>
+          <div className={s.notice} style={{
+            background:  "#faf5ff",
+            borderColor: "#e9d5ff",
+            color:       "#7c3aed",
+          }}>
+            <strong>
+              Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}.
+            </strong>
             {" "}Order codes were automatically converted to manufacturer part numbers.
           </div>
         )}
@@ -425,20 +526,27 @@ function ResultsContent() {
         {/* ── Legend ── */}
         <div className={s.legend}>
           {[
-            { label:"PKG",      bg:"#fffbeb", color:"#d97706", border:"#fde68a", text:"Rounded to package unit" },
-            { label:"STEP",     bg:"#f0fdf4", color:"#15803d", border:"#bbf7d0", text:"Increased to better price tier" },
-            { label:"PKG+STEP", bg:"#faf5ff", color:"#7c3aed", border:"#e9d5ff", text:"Both applied" },
+            { label: "PKG",      bg: "#fffbeb", color: "#d97706", border: "#fde68a", text: "Rounded to package unit" },
+            { label: "STEP",     bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", text: "Increased to better price tier" },
+            { label: "PKG+STEP", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff", text: "Both applied" },
           ].map(l => (
-            <span key={l.label} style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+            <span key={l.label} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{
-                fontSize:"9px", fontWeight:700, color:l.color, background:l.bg,
-                border:`1px solid ${l.border}`, padding:"1px 6px",
-                borderRadius:"99px", fontFamily:"Inter, sans-serif",
-              }}>{l.label}</span>
+                fontSize:     "9px",
+                fontWeight:   700,
+                color:        l.color,
+                background:   l.bg,
+                border:       `1px solid ${l.border}`,
+                padding:      "1px 6px",
+                borderRadius: "99px",
+                fontFamily:   "Inter, sans-serif",
+              }}>
+                {l.label}
+              </span>
               {l.text}
             </span>
           ))}
-          <span style={{ marginLeft:"auto", color:"var(--text-3)" }}>
+          <span style={{ marginLeft: "auto", color: "var(--text-3)" }}>
             Hover badge for details
           </span>
         </div>
@@ -448,7 +556,9 @@ function ResultsContent() {
       {/* ── Footer ── */}
       <footer className={s.footer}>
         <div className={s.footerInner}>
-          <span className={s.footerText}>© {new Date().getFullYear()} icpaste.com</span>
+          <span className={s.footerText}>
+            © {new Date().getFullYear()} icpaste.com
+          </span>
           <span className={s.footerText}>Built for hardware buyers</span>
         </div>
       </footer>
@@ -458,5 +568,9 @@ function ResultsContent() {
 }
 
 export default function ResultsPage() {
-  return <Suspense><ResultsContent /></Suspense>;
+  return (
+    <Suspense>
+      <ResultsContent />
+    </Suspense>
+  );
 }
