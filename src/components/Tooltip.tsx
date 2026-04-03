@@ -76,7 +76,8 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
           </div>
         )}
       </div>
-      {/* Freccia */}
+
+      {/* Freccia bordo */}
       <div style={{
         position:    "absolute",
         top:         "100%",
@@ -88,7 +89,7 @@ export function Tooltip({ children, title, detail, saving }: TooltipProps) {
         borderRight: "5px solid transparent",
         borderTop:   "5px solid #e5e7eb",
       }} />
-      {/* Freccia interna (per coprire il bordo) */}
+      {/* Freccia fill */}
       <div style={{
         position:    "absolute",
         top:         "calc(100% - 1px)",
