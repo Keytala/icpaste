@@ -58,6 +58,34 @@ const BADGE_CONFIG: Record<string, {
   },
 };
 
+// ── Legend Badge Config ───────────────────────────────────────────────────────
+const LEGEND_BADGES = [
+  {
+    label:  "PKG",
+    bg:     "#fffbeb",
+    color:  "#d97706",
+    border: "#fde68a",
+    title:  "Package unit adjusted",
+    detail: "Qty rounded to nearest reel / tray size",
+  },
+  {
+    label:  "STEP",
+    bg:     "#f0fdf4",
+    color:  "#15803d",
+    border: "#bbf7d0",
+    title:  "Better price tier",
+    detail: "Qty increased to reach a cheaper price break",
+  },
+  {
+    label:  "PKG+STEP",
+    bg:     "#faf5ff",
+    color:  "#7c3aed",
+    border: "#e9d5ff",
+    title:  "Package + price tier",
+    detail: "Both package unit and price break applied",
+  },
+];
+
 // ── Adj Badge with Portal Tooltip ─────────────────────────────────────────────
 function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
   type:         AdjustmentType;
@@ -111,7 +139,6 @@ function ResultRow({ r, onResolve }: {
       className={s.tr}
       style={isOutOfStock ? { background: "#fffbeb" } : undefined}
     >
-
       {/* MPN */}
       <td className={s.td}>
         <div className={s.mpn}>{r.mpn}</div>
@@ -187,7 +214,6 @@ function ResultRow({ r, onResolve }: {
       <td className={`${s.td} ${s.tdRight}`}>
         {isNotFound ? (
           <span className={s.notFound}>Not found</span>
-
         ) : isOutOfStock ? (
           <div style={{
             display:        "flex",
@@ -211,7 +237,6 @@ function ResultRow({ r, onResolve }: {
               </button>
             )}
           </div>
-
         ) : (
           <a
             href={r.productUrl}
@@ -286,10 +311,9 @@ function ResultsContent() {
       .finally(() => setLoading(false));
   }, [params, router]);
 
-  // ── Resolve: swap out-of-stock row with stockFallback ─────────────────────
+  // ── Resolve ───────────────────────────────────────────────────────────────
   function handleResolve(mpn: string) {
     if (!data) return;
-
     const updatedResults = data.results.map(r => {
       if (r.mpn !== mpn || !r.stockFallback) return r;
       const fb = r.stockFallback;
@@ -309,11 +333,9 @@ function ResultsContent() {
         stockFallback:   undefined,
       } as OptimizedResult;
     });
-
     const newTotal = parseFloat(
       updatedResults.reduce((sum, r) => sum + (r.totalPrice ?? 0), 0).toFixed(2)
     );
-
     setData({ ...data, results: updatedResults, totalBom: newTotal });
   }
 
@@ -323,15 +345,8 @@ function ResultsContent() {
       <div className={s.loading}>
         <div className={s.loadingPills}>
           {["Mouser", "Digi-Key", "Farnell"].map((d, i) => (
-            <div
-              key={d}
-              className={s.loadingPill}
-              style={{ animationDelay: `${i * 150}ms` }}
-            >
-              <span
-                className={s.loadingDot}
-                style={{ animationDelay: `${i * 200}ms` }}
-              />
+            <div key={d} className={s.loadingPill} style={{ animationDelay: `${i * 150}ms` }}>
+              <span className={s.loadingDot} style={{ animationDelay: `${i * 200}ms` }} />
               {d}
             </div>
           ))}
@@ -341,16 +356,12 @@ function ResultsContent() {
     );
   }
 
-  // ── API Error ─────────────────────────────────────────────────────────────
+  // ── Error ─────────────────────────────────────────────────────────────────
   if (apiError) {
     return (
       <div className={s.loading}>
-        <p style={{ color: "var(--red)", fontFamily: "Inter, sans-serif" }}>
-          {apiError}
-        </p>
-        <button className={s.btnBack} onClick={() => router.push("/")}>
-          ← Back
-        </button>
+        <p style={{ color: "var(--red)", fontFamily: "Inter, sans-serif" }}>{apiError}</p>
+        <button className={s.btnBack} onClick={() => router.push("/")}>← Back</button>
       </div>
     );
   }
@@ -363,13 +374,9 @@ function ResultsContent() {
   const notFound   = data.results.filter(r => r.error && r.error !== "Out of stock");
   const resolved   = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
   const adjusted   = data.results.filter(r => r.adjustment && r.adjustment !== "none");
-
   const totalSaved = parseFloat(
-    data.results
-      .reduce((sum, r) => sum + (r.savedVsOriginal ?? 0), 0)
-      .toFixed(2)
+    data.results.reduce((sum, r) => sum + (r.savedVsOriginal ?? 0), 0).toFixed(2)
   );
-
   const distCount = found.reduce((acc, r) => {
     acc[r.distributor] = (acc[r.distributor] ?? 0) + 1;
     return acc;
@@ -390,20 +397,12 @@ function ResultsContent() {
               ic<span className={s.logoAccent}>paste</span>
             </span>
           </div>
-
           <div className={s.distPills}>
             {Object.entries(distCount).map(([dist, count]) => {
               const style = ds(dist);
               return (
-                <span
-                  key={dist}
-                  className={s.distLink}
-                  style={{
-                    background:  style.bg,
-                    color:       style.color,
-                    borderColor: style.border,
-                  }}
-                >
+                <span key={dist} className={s.distLink}
+                  style={{ background: style.bg, color: style.color, borderColor: style.border }}>
                   <span className={s.distDot} style={{ background: style.dot }} />
                   {dist} · {count}
                 </span>
@@ -456,26 +455,17 @@ function ResultsContent() {
         {/* ── Notices ── */}
         {outOfStock.length > 0 && (
           <div className={s.notice} style={{
-            background:  "#fffbeb",
-            borderColor: "#fde68a",
-            color:       "#92400e",
+            background: "#fffbeb", borderColor: "#fde68a", color: "#92400e",
           }}>
-            <strong>
-              ⚠ {outOfStock.length} component{outOfStock.length > 1 ? "s" : ""} out of stock.
-            </strong>
+            <strong>⚠ {outOfStock.length} component{outOfStock.length > 1 ? "s" : ""} out of stock.</strong>
             {" "}Click <strong>Resolve</strong> to instantly switch to the next best available option.
           </div>
         )}
-
         {resolved.length > 0 && (
           <div className={s.notice} style={{
-            background:  "#faf5ff",
-            borderColor: "#e9d5ff",
-            color:       "#7c3aed",
+            background: "#faf5ff", borderColor: "#e9d5ff", color: "#7c3aed",
           }}>
-            <strong>
-              Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}.
-            </strong>
+            <strong>Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}.</strong>
             {" "}Order codes were automatically converted to manufacturer part numbers.
           </div>
         )}
@@ -508,30 +498,30 @@ function ResultsContent() {
           </div>
         </div>
 
-        {/* ── Legend ── */}
+        {/* ── Legend — solo badge con tooltip ── */}
         <div className={s.legend}>
-          {[
-            { label: "PKG",      bg: "#fffbeb", color: "#d97706", border: "#fde68a", text: "Rounded to package unit" },
-            { label: "STEP",     bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", text: "Increased to better price tier" },
-            { label: "PKG+STEP", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff", text: "Both applied" },
-          ].map(l => (
-            <span key={l.label} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span style={{
-                fontSize:     "9px",
-                fontWeight:   700,
-                color:        l.color,
-                background:   l.bg,
-                border:       `1px solid ${l.border}`,
-                padding:      "1px 6px",
-                borderRadius: "99px",
-                fontFamily:   "Inter, sans-serif",
-              }}>
-                {l.label}
-              </span>
-              {l.text}
-            </span>
-          ))}
-          <span style={{ marginLeft: "auto", color: "var(--text-3)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {LEGEND_BADGES.map(l => (
+              <Tooltip key={l.label} title={l.title} detail={l.detail}>
+                <span style={{
+                  fontSize:     "9px",
+                  fontWeight:   700,
+                  color:        l.color,
+                  background:   l.bg,
+                  border:       `1px solid ${l.border}`,
+                  padding:      "2px 8px",
+                  borderRadius: "99px",
+                  fontFamily:   "Inter, sans-serif",
+                  cursor:       "help",
+                  userSelect:   "none",
+                  lineHeight:   "16px",
+                }}>
+                  {l.label}
+                </span>
+              </Tooltip>
+            ))}
+          </div>
+          <span style={{ marginLeft: "auto", color: "var(--text-3)", fontSize: 11 }}>
             Hover badge for details
           </span>
         </div>
@@ -541,9 +531,7 @@ function ResultsContent() {
       {/* ── Footer ── */}
       <footer className={s.footer}>
         <div className={s.footerInner}>
-          <span className={s.footerText}>
-            © {new Date().getFullYear()} icpaste.com
-          </span>
+          <span className={s.footerText}>© {new Date().getFullYear()} icpaste.com</span>
           <span className={s.footerText}>Built for hardware buyers</span>
         </div>
       </footer>
