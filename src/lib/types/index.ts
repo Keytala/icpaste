@@ -57,3 +57,4 @@ export interface SearchResponse {
   currency:   string;
   searchedAt: string;
 }
+export type { BomRow } from "../utils/bom-parser";
