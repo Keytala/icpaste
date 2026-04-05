@@ -52,32 +52,14 @@
   transition: background 0.15s, color 0.15s;
   font-family: 'Inter', sans-serif;
 }
-.btnBack:hover {
-  background: var(--surface);
-  color: var(--text-1);
-}
+.btnBack:hover { background: var(--surface); color: var(--text-1); }
 
-.divider {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-}
+.divider { width: 1px; height: 16px; background: var(--border); }
 
-.logo {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-1);
-  font-family: 'Inter', sans-serif;
-}
-
+.logo { font-size: 15px; font-weight: 700; color: var(--text-1); font-family: 'Inter', sans-serif; }
 .logoAccent { color: var(--brand); }
 
-.distPills {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
+.distPills { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 /* ── Main ── */
 .main {
@@ -146,7 +128,7 @@
 /* ── Production Qty Banner ── */
 .prodBanner {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 14px 20px;
   background: #f0f9ff;
@@ -154,17 +136,18 @@
   border-radius: var(--radius);
   margin-bottom: 12px;
   animation: fadeUp 0.2s ease;
-  flex-wrap: wrap;
 }
 
 .prodBannerIcon {
   font-size: 18px;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .prodBannerText {
   flex: 1;
-  min-width: 200px;
+  min-width: 0;          /* ← permette al testo di restringersi */
+  padding-right: 16px;   /* ← margine tra testo e controlli */
 }
 
 .prodBannerTitle {
@@ -179,13 +162,36 @@
   font-size: 11px;
   color: #0284c7;
   font-family: 'Inter', sans-serif;
+  line-height: 1.5;
 }
 
 .prodBannerControls {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
   flex-shrink: 0;
+}
+
+.prodActiveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  background: #0ea5e9;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ── Input row (label + input + buttons) ── */
+.prodInputRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .prodBannerLabel {
@@ -197,9 +203,9 @@
 }
 
 .prodInput {
-  width: 90px;
+  width: 86px;
   padding: 6px 10px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
   color: var(--text-1);
@@ -216,14 +222,11 @@
   box-shadow: 0 0 0 3px rgba(14,165,233,0.12);
 }
 
-.prodInput::-webkit-inner-spin-button,
-.prodInput::-webkit-outer-spin-button { opacity: 1; }
-
 .btnApply {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 16px;
+  padding: 6px 14px;
   background: #0ea5e9;
   color: white;
   font-size: 12px;
@@ -242,7 +245,6 @@
 .btnReset {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   padding: 6px 12px;
   background: white;
   color: #0369a1;
@@ -257,19 +259,6 @@
 }
 .btnReset:hover { background: #f0f9ff; }
 
-.prodActiveBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  color: white;
-  background: #0ea5e9;
-  padding: 3px 10px;
-  border-radius: 99px;
-  font-family: 'Inter', sans-serif;
-}
-
 /* ── Table ── */
 .tableWrap {
   border: 1px solid var(--border);
@@ -281,12 +270,7 @@
 
 .tableScroll { overflow-x: auto; }
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: 'Inter', sans-serif;
-}
-
+.table { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
 .thead { background: var(--surface); }
 
 .th {
@@ -303,19 +287,11 @@
 .thRight { text-align: right; }
 .thLeft  { text-align: left; }
 
-.tr {
-  border-bottom: 1px solid var(--border);
-  transition: background 0.1s;
-}
+.tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
 .tr:last-child { border-bottom: none; }
 .tr:hover { background: var(--surface); }
 
-.td {
-  padding: 14px 18px;
-  font-size: 13px;
-  vertical-align: middle;
-}
-
+.td { padding: 14px 18px; font-size: 13px; vertical-align: middle; }
 .tdRight { text-align: right; }
 
 /* ── MPN ── */
@@ -340,9 +316,9 @@
 }
 
 /* ── Qty ── */
-.qtyNormal     { color: var(--text-1); font-weight: 600; }
-.qtyAdjusted   { color: var(--amber);  font-weight: 600; }
-.qtyOriginal   {
+.qtyNormal   { color: var(--text-1); font-weight: 600; }
+.qtyAdjusted { color: var(--amber);  font-weight: 600; }
+.qtyOriginal {
   font-size:   11px;
   color:       var(--text-3);
   font-family: 'Inter', sans-serif;
@@ -372,14 +348,9 @@
 }
 .distLink:hover { opacity: 0.75; }
 
-.distDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
+.distDot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
-/* ── Out of stock ── */
+/* ── Status badges ── */
 .outOfStock {
   display: inline-flex;
   align-items: center;
@@ -394,7 +365,6 @@
   font-family: 'Inter', sans-serif;
 }
 
-/* ── Insufficient stock (production mode) ── */
 .insufficientStock {
   display: inline-flex;
   align-items: center;
@@ -406,6 +376,18 @@
   padding: 4px 10px;
   border-radius: 99px;
   white-space: nowrap;
+  font-family: 'Inter', sans-serif;
+}
+
+.notFound {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--red);
+  background: var(--red-light);
+  border: 1px solid #fecaca;
+  padding: 4px 10px;
+  border-radius: 99px;
   font-family: 'Inter', sans-serif;
 }
 
@@ -430,20 +412,7 @@
 .btnResolve:hover  { background: #15803d; }
 .btnResolve:active { transform: scale(0.97); }
 
-/* ── Not found ── */
-.notFound {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--red);
-  background: var(--red-light);
-  border: 1px solid #fecaca;
-  padding: 4px 10px;
-  border-radius: 99px;
-  font-family: 'Inter', sans-serif;
-}
-
-/* ── Legend ── */
+/* ── Legend + Export ── */
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -453,6 +422,29 @@
   font-size: 12px;
   color: var(--text-3);
   font-family: 'Inter', sans-serif;
+}
+
+/* ── Export button — discreto ── */
+.btnExport {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: white;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.btnExport:hover {
+  border-color: #0ea5e9;
+  color: #0ea5e9;
+  background: #f0f9ff;
 }
 
 /* ── Loading ── */
@@ -490,18 +482,10 @@
   animation: pulse 1.2s ease infinite;
 }
 
-.loadingText {
-  font-size: 14px;
-  color: var(--text-3);
-  font-family: 'Inter', sans-serif;
-}
+.loadingText { font-size: 14px; color: var(--text-3); font-family: 'Inter', sans-serif; }
 
 /* ── Footer ── */
-.footer {
-  border-top: 1px solid var(--border);
-  padding: 18px 24px;
-  margin-top: 40px;
-}
+.footer { border-top: 1px solid var(--border); padding: 18px 24px; margin-top: 40px; }
 
 .footerInner {
   max-width: 1100px;
@@ -511,17 +495,37 @@
   justify-content: space-between;
 }
 
-.footerText {
-  font-size: 12px;
-  color: var(--text-3);
-  font-family: 'Inter', sans-serif;
-}
+.footerText { font-size: 12px; color: var(--text-3); font-family: 'Inter', sans-serif; }
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
-  .stats      { grid-template-columns: repeat(2, 1fr); }
-  .distPills  { display: none; }
-  .prodBanner { flex-direction: column; align-items: flex-start; }
+  .stats     { grid-template-columns: repeat(2, 1fr); }
+  .distPills { display: none; }
+
+  /* Production banner: stack verticale su mobile */
+  .prodBanner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .prodBannerText {
+    padding-right: 0;
+  }
+
+  .prodBannerControls {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  /* Input row va a capo su mobile */
+  .prodInputRow {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .prodBannerLabel {
+    width: 100%;   /* label su riga intera */
+  }
 }
 
 @media (max-width: 480px) {
