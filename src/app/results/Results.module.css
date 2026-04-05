@@ -532,3 +532,24 @@
 @media (max-width: 480px) {
   .stats { grid-template-columns: 1fr; }
 }
+/* ── Export button ── */
+.btnExport {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: white;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.btnExport:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
