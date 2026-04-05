@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState, Suspense, useRef, useCallback } from "react";
-import { useSearchParams, useRouter }    from "next/navigation";
+import { useEffect, useState, Suspense, useCallback } from "react";
+import { useSearchParams, useRouter }                  from "next/navigation";
 import { SearchResponse, OptimizedResult, AdjustmentType } from "@/lib/types";
-import { BomRow }          from "@/lib/utils/bom-parser";
-import { Tooltip }         from "@/components/Tooltip";
-import { exportToExcel }   from "@/lib/utils/export-excel";
+import { Tooltip }       from "@/components/Tooltip";
+import { exportToExcel } from "@/lib/utils/export-excel";
 import s from "./Results.module.css";
 
 // ── Distributor styles ────────────────────────────────────────────────────────
@@ -28,27 +27,38 @@ const BADGE_CONFIG: Record<string, {
   title:  string; detail: (req: number, opt: number) => string;
 }> = {
   package: {
-    label:  "PKG",    bg: "#fffbeb", color: "#d97706", border: "#fde68a",
-    title:  "Package unit adjusted",
+    label: "PKG", bg: "#fffbeb", color: "#d97706", border: "#fde68a",
+    title: "Package unit adjusted",
     detail: (req, opt) => `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  rounded to reel / tray size`,
   },
   pricestep: {
-    label:  "STEP",   bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0",
-    title:  "Better price tier",
+    label: "STEP", bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0",
+    title: "Better price tier",
     detail: (req, opt) => `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  cheaper price break reached`,
   },
   both: {
-    label:  "PKG+STEP", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff",
-    title:  "Package + price tier",
+    label: "PKG+STEP", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff",
+    title: "Package + price tier",
     detail: (req, opt) => `${req.toLocaleString()} → ${opt.toLocaleString()} pcs  ·  package unit and price break`,
   },
 };
 
 const LEGEND_BADGES = [
   { label: "PKG",      bg: "#fffbeb", color: "#d97706", border: "#fde68a", title: "Package unit adjusted",   detail: "Qty rounded to nearest reel / tray size" },
-  { label: "STEP",     bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", title: "Better price tier",       detail: "Qty increased to reach a cheaper price break" },
-  { label: "PKG+STEP", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff", title: "Package + price tier",    detail: "Both package unit and price break applied" },
+  { label: "STEP",     bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", title: "Better price tier",        detail: "Qty increased to reach a cheaper price break" },
+  { label: "PKG+STEP", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff", title: "Package + price tier",     detail: "Both package unit and price break applied" },
 ];
+
+// ── Badge pill style ──────────────────────────────────────────────────────────
+function badgePill(color: string, bg: string, border: string): React.CSSProperties {
+  return {
+    display: "inline-block", fontSize: "9px", fontWeight: 700,
+    color, background: bg, border: `1px solid ${border}`,
+    padding: "1px 6px", borderRadius: "99px",
+    fontFamily: "Inter, sans-serif", cursor: "help",
+    userSelect: "none", lineHeight: "16px",
+  };
+}
 
 // ── Adj Badge ─────────────────────────────────────────────────────────────────
 function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
@@ -63,33 +73,37 @@ function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
       detail={cfg.detail(requestedQty, optimalQty)}
       saving={saved > 0 ? `saves ${currency} ${saved.toFixed(2)}` : undefined}
     >
-      <span style={{
-        display: "inline-block", fontSize: "9px", fontWeight: 700,
-        color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`,
-        padding: "1px 6px", borderRadius: "99px", fontFamily: "Inter, sans-serif",
-        cursor: "help", userSelect: "none", lineHeight: "16px",
-      }}>
-        {cfg.label}
-      </span>
+      <span style={badgePill(cfg.color, cfg.bg, cfg.border)}>{cfg.label}</span>
     </Tooltip>
   );
 }
 
-// ── Result Row ────────────────────────────────────────────────────────────────
-function ResultRow({ r, onResolve, prodQty }: {
-  r: OptimizedResult; onResolve: (mpn: string) => void; prodQty: number;
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ label, value, sub, accent, cardStyle }: {
+  label: string; value: string; sub?: string;
+  accent?: boolean; cardStyle?: React.CSSProperties;
 }) {
-  const isOutOfStock   = r.error === "Out of stock";
-  const isInsufficient = r.error === "Insufficient stock for production qty";
-  const isNotFound     = Boolean(r.error && !isOutOfStock && !isInsufficient);
-  const wasResolved    = Boolean(r.originalCode && r.originalCode !== r.mpn);
-  const style          = ds(r.distributor);
-  const hasFallback    = Boolean(r.stockFallback);
-  const isProdMode     = prodQty > 1;
-  const originalBomQty = isProdMode ? Math.round(r.requestedQty / prodQty) : r.requestedQty;
+  return (
+    <div className={s.statCard} style={cardStyle}>
+      <div className={s.statLabel}>{label}</div>
+      <div className={`${s.statValue} ${accent ? s.statValueAccent : ""}`}>{value}</div>
+      {sub && <div className={s.statSub}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── Result Row ────────────────────────────────────────────────────────────────
+function ResultRow({ r, onResolve }: {
+  r: OptimizedResult; onResolve: (mpn: string) => void;
+}) {
+  const isOutOfStock = r.error === "Out of stock";
+  const isNotFound   = Boolean(r.error && r.error !== "Out of stock");
+  const wasResolved  = Boolean(r.originalCode && r.originalCode !== r.mpn);
+  const style        = ds(r.distributor);
+  const hasFallback  = Boolean(r.stockFallback);
 
   return (
-    <tr className={s.tr} style={isOutOfStock || isInsufficient ? { background: "#fffbeb" } : undefined}>
+    <tr className={s.tr} style={isOutOfStock ? { background: "#fffbeb" } : undefined}>
 
       {/* MPN */}
       <td className={s.td}>
@@ -98,20 +112,17 @@ function ResultRow({ r, onResolve, prodQty }: {
       </td>
 
       {/* Description */}
-      <td className={`${s.td} ${s.desc}`} style={{ maxWidth: 180 }}>
-        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <td className={`${s.td} ${s.desc}`}>
+        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>
           {r.description || "—"}
         </span>
       </td>
 
-      {/* Requested qty */}
+      {/* Requested */}
       <td className={`${s.td} ${s.tdRight}`}>
         <span style={{ color: "var(--text-2)", fontVariantNumeric: "tabular-nums" }}>
           {r.requestedQty.toLocaleString()}
         </span>
-        {isProdMode && (
-          <div className={s.qtyOriginal}>{originalBomQty.toLocaleString()} × {prodQty}</div>
-        )}
       </td>
 
       {/* Buy qty + badge */}
@@ -153,22 +164,23 @@ function ResultRow({ r, onResolve, prodQty }: {
       <td className={`${s.td} ${s.tdRight}`}>
         {isNotFound ? (
           <span className={s.notFound}>Not found</span>
-        ) : isInsufficient ? (
-          <span className={s.insufficientStock}>⚠ Insufficient stock</span>
         ) : isOutOfStock ? (
           <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
             <span className={s.outOfStock}>⚠ Out of stock</span>
             {hasFallback && (
-              <button className={s.btnResolve} onClick={() => onResolve(r.mpn)}
-                title={`Switch to ${r.stockFallback!.distributor} — ${r.stockFallback!.stock.toLocaleString()} in stock`}>
+              <button className={s.btnResolve} onClick={() => onResolve(r.mpn)}>
                 Resolve ↗
               </button>
             )}
           </div>
         ) : (
-          <a href={r.productUrl} target="_blank" rel="noopener noreferrer"
+          <a
+            href={r.productUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className={s.distLink}
-            style={{ background: style.bg, color: style.color, borderColor: style.border }}>
+            style={{ background: style.bg, color: style.color, borderColor: style.border }}
+          >
             <span className={s.distDot} style={{ background: style.dot }} />
             {r.distributor}
             <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,108 +194,25 @@ function ResultRow({ r, onResolve, prodQty }: {
   );
 }
 
-// ── Stat Card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent, style }: {
-  label: string; value: string; sub?: string; accent?: boolean; style?: React.CSSProperties;
-}) {
-  return (
-    <div className={s.statCard} style={style}>
-      <div className={s.statLabel}>{label}</div>
-      <div className={`${s.statValue} ${accent ? s.statValueAccent : ""}`}>{value}</div>
-      {sub && <div className={s.statSub}>{sub}</div>}
-    </div>
-  );
-}
-
-// ── Production Qty Banner ─────────────────────────────────────────────────────
-function ProdQtyBanner({ onApply, isLoading, activeProdQty }: {
-  onApply: (qty: number) => void; isLoading: boolean; activeProdQty: number;
-}) {
-  const [value, setValue] = useState(activeProdQty > 1 ? String(activeProdQty) : "");
-
-  const handleApply = useCallback(() => {
-    const qty = parseInt(value, 10);
-    if (!qty || qty < 1) return;
-    onApply(qty);
-  }, [value, onApply]);
-
-  const handleReset = useCallback(() => {
-    setValue("");
-    onApply(1);
-  }, [onApply]);
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter") handleApply();
-  }
-
-  return (
-    <div className={s.prodBanner}>
-
-      {/* Icon + text */}
-      <span className={s.prodBannerIcon}>🏭</span>
-      <div className={s.prodBannerText}>
-        <div className={s.prodBannerTitle}>Production Run</div>
-        <div className={s.prodBannerSub}>
-          Multiply BOM quantities by the number of finished units.
-          Stock checks and price breaks are recalculated automatically.
-        </div>
-      </div>
-
-      {/* Controls — su mobile vanno a capo */}
-      <div className={s.prodBannerControls}>
-        {activeProdQty > 1 && (
-          <span className={s.prodActiveBadge}>× {activeProdQty} units active</span>
-        )}
-        <div className={s.prodInputRow}>
-          <span className={s.prodBannerLabel}>Units to produce:</span>
-          <input
-            type="number"
-            min={1}
-            max={100000}
-            placeholder="e.g. 500"
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className={s.prodInput}
-          />
-          <button
-            className={s.btnApply}
-            onClick={handleApply}
-            disabled={isLoading || !value || parseInt(value) < 1}
-          >
-            {isLoading ? "…" : "Apply ↗"}
-          </button>
-          {activeProdQty > 1 && (
-            <button className={s.btnReset} onClick={handleReset}>Reset</button>
-          )}
-        </div>
-      </div>
-
-    </div>
-  );
-}
-
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 function ResultsContent() {
-  const params  = useSearchParams();
-  const router  = useRouter();
+  const params = useSearchParams();
+  const router = useRouter();
 
   const [data, setData]               = useState<SearchResponse | null>(null);
-  const [baseData, setBaseData]       = useState<SearchResponse | null>(null);
-  const [originalBom, setOriginalBom] = useState<BomRow[]>([]);
+  const [origData, setOrigData]       = useState<SearchResponse | null>(null);
   const [loading, setLoading]         = useState(true);
-  const [prodLoading, setProdLoading] = useState(false);
   const [apiError, setApiError]       = useState("");
+  const [prodQtyInput, setProdQtyInput] = useState("");
   const [activeProdQty, setActiveProdQty] = useState(1);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
-  // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
     const encoded = params.get("bom");
     if (!encoded) { router.push("/"); return; }
-    let bom: BomRow[];
+    let bom;
     try { bom = JSON.parse(atob(encoded)); }
     catch { router.push("/"); return; }
-    setOriginalBom(bom);
 
     fetch("/api/search", {
       method: "POST",
@@ -293,46 +222,74 @@ function ResultsContent() {
       .then(r => r.json())
       .then(json => {
         if (json.error) setApiError(json.error);
-        else { setData(json as SearchResponse); setBaseData(json as SearchResponse); }
+        else {
+          setData(json as SearchResponse);
+          setOrigData(json as SearchResponse);
+        }
       })
       .catch(() => setApiError("Network error. Please try again."))
       .finally(() => setLoading(false));
   }, [params, router]);
 
-  // ── Apply production qty ──────────────────────────────────────────────────
-  const handleApplyProdQty = useCallback(async (prodQty: number) => {
-    if (prodQty === 1) { setData(baseData); setActiveProdQty(1); return; }
-    setProdLoading(true);
-    const multipliedBom: BomRow[] = originalBom.map(row => ({ ...row, qty: row.qty * prodQty }));
-    try {
-      const res  = await fetch("/api/search", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bom: multipliedBom }),
-      });
-      const json = await res.json();
-      if (json.error) setApiError(json.error);
-      else { setData(json as SearchResponse); setActiveProdQty(prodQty); }
-    } catch { setApiError("Network error. Please try again."); }
-    finally { setProdLoading(false); }
-  }, [originalBom, baseData]);
-
-  // ── Resolve ───────────────────────────────────────────────────────────────
+  // ── Resolve out-of-stock ──────────────────────────────────────────────────
   function handleResolve(mpn: string) {
     if (!data) return;
-    const updatedResults = data.results.map(r => {
+    const updated = data.results.map(r => {
       if (r.mpn !== mpn || !r.stockFallback) return r;
       const fb = r.stockFallback;
       return {
         ...r,
         distributor: fb.distributor, optimalQty: fb.optimalQty,
         rounded: fb.rounded, adjustment: "none" as AdjustmentType,
-        savedVsOriginal: 0, unitPrice: fb.unitPrice, totalPrice: fb.totalPrice,
-        currency: fb.currency, stock: fb.stock, productUrl: fb.productUrl,
+        savedVsOriginal: 0, unitPrice: fb.unitPrice,
+        totalPrice: fb.totalPrice, currency: fb.currency,
+        stock: fb.stock, productUrl: fb.productUrl,
         error: undefined, stockFallback: undefined,
       } as OptimizedResult;
     });
-    const newTotal = parseFloat(updatedResults.reduce((sum, r) => sum + (r.totalPrice ?? 0), 0).toFixed(2));
-    setData({ ...data, results: updatedResults, totalBom: newTotal });
+    const newTotal = parseFloat(updated.reduce((s, r) => s + (r.totalPrice ?? 0), 0).toFixed(2));
+    setData({ ...data, results: updated, totalBom: newTotal });
+  }
+
+  // ── Production Run Apply ──────────────────────────────────────────────────
+  const handleApplyProdQty = useCallback(async () => {
+    if (!origData) return;
+    const qty = parseInt(prodQtyInput, 10);
+    if (isNaN(qty) || qty < 1) return;
+
+    setIsRecalculating(true);
+
+    // Moltiplica le quantità originali per il moltiplicatore
+    const multipliedBom = origData.results.map(r => ({
+      rawCode:   r.mpn,
+      qty:       r.requestedQty * qty,
+      detection: { isDistributorCode: false, detectedAs: "unknown", originalCode: r.mpn },
+    }));
+
+    try {
+      const res  = await fetch("/api/search", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ bom: multipliedBom }),
+      });
+      const json = await res.json();
+      if (!json.error) {
+        setData(json as SearchResponse);
+        setActiveProdQty(qty);
+      }
+    } catch {
+      // fallback silenzioso
+    } finally {
+      setIsRecalculating(false);
+    }
+  }, [origData, prodQtyInput]);
+
+  // ── Reset Production Run ──────────────────────────────────────────────────
+  function handleReset() {
+    if (!origData) return;
+    setData(origData);
+    setActiveProdQty(1);
+    setProdQtyInput("");
   }
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -364,15 +321,15 @@ function ResultsContent() {
   if (!data) return null;
 
   // ── Derived stats ─────────────────────────────────────────────────────────
-  const found        = data.results.filter(r => !r.error);
-  const outOfStock   = data.results.filter(r => r.error === "Out of stock");
-  const insufficient = data.results.filter(r => r.error === "Insufficient stock for production qty");
-  const notFound     = data.results.filter(r => r.error && r.error !== "Out of stock" && r.error !== "Insufficient stock for production qty");
-  const resolved     = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
-  const adjusted     = data.results.filter(r => r.adjustment && r.adjustment !== "none");
-  const totalSaved   = parseFloat(data.results.reduce((sum, r) => sum + (r.savedVsOriginal ?? 0), 0).toFixed(2));
-  const distCount    = found.reduce((acc, r) => {
-    acc[r.distributor] = (acc[r.distributor] ?? 0) + 1; return acc;
+  const found      = data.results.filter(r => !r.error);
+  const outOfStock = data.results.filter(r => r.error === "Out of stock");
+  const notFound   = data.results.filter(r => r.error && r.error !== "Out of stock");
+  const resolved   = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
+  const adjusted   = data.results.filter(r => r.adjustment && r.adjustment !== "none");
+  const totalSaved = parseFloat(data.results.reduce((s, r) => s + (r.savedVsOriginal ?? 0), 0).toFixed(2));
+  const distCount  = found.reduce((acc, r) => {
+    acc[r.distributor] = (acc[r.distributor] ?? 0) + 1;
+    return acc;
   }, {} as Record<string, number>);
 
   return (
@@ -382,17 +339,19 @@ function ResultsContent() {
       <header className={s.header}>
         <div className={s.headerInner}>
           <div className={s.headerLeft}>
-            <button className={s.btnBack} onClick={() => router.push("/")}>← New search</button>
+            <button className={s.btnBack} onClick={() => router.push("/")}>
+              ← New search
+            </button>
             <div className={s.divider} />
             <span className={s.logo}>ic<span className={s.logoAccent}>paste</span></span>
           </div>
           <div className={s.distPills}>
             {Object.entries(distCount).map(([dist, count]) => {
-              const style = ds(dist);
+              const st = ds(dist);
               return (
                 <span key={dist} className={s.distLink}
-                  style={{ background: style.bg, color: style.color, borderColor: style.border }}>
-                  <span className={s.distDot} style={{ background: style.dot }} />
+                  style={{ background: st.bg, color: st.color, borderColor: st.border }}>
+                  <span className={s.distDot} style={{ background: st.dot }} />
                   {dist} · {count}
                 </span>
               );
@@ -405,35 +364,69 @@ function ResultsContent() {
 
         {/* ── Stats ── */}
         <div className={s.stats}>
-          <StatCard
-            label={activeProdQty > 1 ? `BOM Total × ${activeProdQty}` : "BOM Total"}
-            value={`${data.currency} ${data.totalBom.toFixed(2)}`}
-            sub={activeProdQty > 1 ? `${activeProdQty} production units` : "estimated cost"}
-            accent
-          />
-          <StatCard
-            label="Found"
-            value={`${found.length} / ${data.results.length}`}
-            sub="components with stock"
-          />
+          <StatCard label="BOM Total" value={`${data.currency} ${data.totalBom.toFixed(2)}`} sub="estimated cost" accent />
+          <StatCard label="Found"     value={`${found.length} / ${data.results.length}`}      sub="components with stock" />
           {totalSaved > 0 && (
-            <StatCard
-              label="Optimized savings" value={`$${totalSaved.toFixed(2)}`}
+            <StatCard label="Optimized savings" value={`$${totalSaved.toFixed(2)}`}
               sub={`${adjusted.length} qty adjusted`}
-              style={{ borderColor: "#bbf7d0", background: "#f0fdf4" }}
-            />
+              cardStyle={{ borderColor: "#bbf7d0", background: "#f0fdf4" }} />
           )}
-          {(outOfStock.length > 0 || insufficient.length > 0) && (
-            <StatCard
-              label={insufficient.length > 0 ? "Insufficient stock" : "Out of stock"}
-              value={`${outOfStock.length + insufficient.length}`}
-              sub={insufficient.length > 0 ? "for production qty" : "click Resolve to fix"}
-              style={{ borderColor: "#fde68a", background: "#fffbeb" }}
-            />
+          {outOfStock.length > 0 && (
+            <StatCard label="Out of stock" value={`${outOfStock.length}`}
+              sub="click Resolve to fix"
+              cardStyle={{ borderColor: "#fde68a", background: "#fffbeb" }} />
           )}
           {notFound.length > 0 && (
             <StatCard label="Not found" value={`${notFound.length}`} sub="check MPN manually" />
           )}
+        </div>
+
+        {/* ── Production Run Banner ── */}
+        <div className={s.productionBanner}>
+          <div className={s.productionBannerLeft}>
+            <span className={s.productionBannerIcon}>🏭</span>
+            <div className={s.productionBannerText}>
+              <div className={s.productionBannerTitle}>
+                Production Run
+                {activeProdQty > 1 && (
+                  <span style={{
+                    marginLeft: 8, fontSize: 11, fontWeight: 600,
+                    color: "white", background: "#0284c7",
+                    padding: "1px 8px", borderRadius: "99px",
+                  }}>
+                    × {activeProdQty} units active
+                  </span>
+                )}
+              </div>
+              <div className={s.productionBannerDesc}>
+                Multiply BOM quantities by the number of finished units. Stock checks and price breaks are recalculated automatically.
+              </div>
+            </div>
+          </div>
+          <div className={s.productionBannerRight}>
+            <span className={s.productionLabel}>Units to produce:</span>
+            <input
+              type="number"
+              min="1"
+              placeholder="e.g. 500"
+              value={prodQtyInput}
+              onChange={e => setProdQtyInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleApplyProdQty()}
+              className={s.productionInput}
+            />
+            <button
+              className={s.btnApply}
+              onClick={handleApplyProdQty}
+              disabled={isRecalculating || !prodQtyInput}
+            >
+              {isRecalculating ? "…" : "Apply ✓"}
+            </button>
+            {activeProdQty > 1 && (
+              <button className={s.btnReset} onClick={handleReset}>
+                Reset
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Notices ── */}
@@ -443,30 +436,10 @@ function ResultsContent() {
             {" "}Click <strong>Resolve</strong> to instantly switch to the next best available option.
           </div>
         )}
-        {insufficient.length > 0 && (
-          <div className={s.notice} style={{ background: "#fef2f2", borderColor: "#fecaca", color: "#991b1b" }}>
-            <strong>⚠ {insufficient.length} component{insufficient.length > 1 ? "s" : ""} have insufficient stock</strong>
-            {" "}for a production run of <strong>{activeProdQty} units</strong>.
-          </div>
-        )}
         {resolved.length > 0 && (
           <div className={s.notice} style={{ background: "#faf5ff", borderColor: "#e9d5ff", color: "#7c3aed" }}>
             <strong>Auto-resolved {resolved.length} distributor code{resolved.length > 1 ? "s" : ""}.</strong>
             {" "}Order codes were automatically converted to manufacturer part numbers.
-          </div>
-        )}
-
-        {/* ── Production Qty Banner ── */}
-        <ProdQtyBanner
-          onApply={handleApplyProdQty}
-          isLoading={prodLoading}
-          activeProdQty={activeProdQty}
-        />
-
-        {prodLoading && (
-          <div style={{ textAlign: "center", padding: "12px", fontSize: "13px",
-            color: "var(--text-3)", fontFamily: "Inter, sans-serif" }}>
-            Recalculating for {activeProdQty} units…
           </div>
         )}
 
@@ -478,9 +451,7 @@ function ResultsContent() {
                 <tr>
                   <th className={`${s.th} ${s.thLeft}`}>MPN</th>
                   <th className={`${s.th} ${s.thLeft}`}>Description</th>
-                  <th className={`${s.th} ${s.thRight}`}>
-                    {activeProdQty > 1 ? `Qty × ${activeProdQty}` : "Requested"}
-                  </th>
+                  <th className={`${s.th} ${s.thRight}`}>Requested</th>
                   <th className={`${s.th} ${s.thRight}`}>Buy Qty</th>
                   <th className={`${s.th} ${s.thRight}`}>Unit Price</th>
                   <th className={`${s.th} ${s.thRight}`}>Total</th>
@@ -489,12 +460,7 @@ function ResultsContent() {
               </thead>
               <tbody>
                 {data.results.map(r => (
-                  <ResultRow
-                    key={r.originalCode ?? r.mpn}
-                    r={r}
-                    onResolve={handleResolve}
-                    prodQty={activeProdQty}
-                  />
+                  <ResultRow key={r.originalCode ?? r.mpn} r={r} onResolve={handleResolve} />
                 ))}
               </tbody>
             </table>
@@ -506,24 +472,14 @@ function ResultsContent() {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {LEGEND_BADGES.map(l => (
               <Tooltip key={l.label} title={l.title} detail={l.detail}>
-                <span style={{
-                  fontSize: "9px", fontWeight: 700, color: l.color,
-                  background: l.bg, border: `1px solid ${l.border}`,
-                  padding: "2px 8px", borderRadius: "99px",
-                  fontFamily: "Inter, sans-serif", cursor: "help",
-                  userSelect: "none", lineHeight: "16px",
-                }}>
-                  {l.label}
-                </span>
+                <span style={badgePill(l.color, l.bg, l.border)}>{l.label}</span>
               </Tooltip>
             ))}
           </div>
-
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
             <span style={{ color: "var(--text-3)", fontSize: 11 }}>
               Hover badge for details
             </span>
-            {/* ── Export to Excel button ── */}
             <button
               className={s.btnExport}
               onClick={() => exportToExcel({
@@ -534,11 +490,7 @@ function ResultsContent() {
                 searchedAt: data.searchedAt,
               })}
             >
-              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-              </svg>
-              Export to Excel
+              ↓ Export to Excel
             </button>
           </div>
         </div>
