@@ -125,7 +125,7 @@
   max-width: 520px;
 }
 
-/* ── Input box — più grande e prominente ── */
+/* ── Input box ── */
 .inputBox {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -163,7 +163,7 @@
   font-family: 'Inter', sans-serif;
 }
 
-/* ── Textarea body — altezza generosa ── */
+/* ── Textarea body ── */
 .inputBody {
   display: flex;
   min-height: 300px;
