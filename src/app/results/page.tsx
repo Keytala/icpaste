@@ -2,8 +2,10 @@
 
 import { useEffect, useState, Suspense, useRef, useCallback } from "react";
 import { useSearchParams, useRouter }    from "next/navigation";
-import { SearchResponse, OptimizedResult, AdjustmentType, BomRow } from "@/lib/types";
-import { Tooltip } from "@/components/Tooltip";
+import { SearchResponse, OptimizedResult, AdjustmentType } from "@/lib/types";
+import { BomRow }          from "@/lib/utils/bom-parser";
+import { Tooltip }         from "@/components/Tooltip";
+import { exportToExcel }   from "@/lib/utils/export-excel";
 import s from "./Results.module.css";
 
 // ── Distributor styles ────────────────────────────────────────────────────────
@@ -75,36 +77,24 @@ function AdjBadge({ type, saved, requestedQty, optimalQty, currency }: {
 
 // ── Result Row ────────────────────────────────────────────────────────────────
 function ResultRow({ r, onResolve, prodQty }: {
-  r:         OptimizedResult;
-  onResolve: (mpn: string) => void;
-  prodQty:   number;
+  r: OptimizedResult; onResolve: (mpn: string) => void; prodQty: number;
 }) {
-  const isOutOfStock      = r.error === "Out of stock";
-  const isNotFound        = Boolean(r.error && r.error !== "Out of stock");
-  const isInsufficient    = Boolean(r.error === "Insufficient stock for production qty");
-  const wasResolved       = Boolean(r.originalCode && r.originalCode !== r.mpn);
-  const style             = ds(r.distributor);
-  const hasFallback       = Boolean(r.stockFallback);
-  const isProdMode        = prodQty > 1;
-
-  // Qty originale dalla BOM (prima della moltiplicazione)
-  const originalBomQty = isProdMode
-    ? Math.round(r.requestedQty / prodQty)
-    : r.requestedQty;
+  const isOutOfStock   = r.error === "Out of stock";
+  const isInsufficient = r.error === "Insufficient stock for production qty";
+  const isNotFound     = Boolean(r.error && !isOutOfStock && !isInsufficient);
+  const wasResolved    = Boolean(r.originalCode && r.originalCode !== r.mpn);
+  const style          = ds(r.distributor);
+  const hasFallback    = Boolean(r.stockFallback);
+  const isProdMode     = prodQty > 1;
+  const originalBomQty = isProdMode ? Math.round(r.requestedQty / prodQty) : r.requestedQty;
 
   return (
-    <tr className={s.tr} style={
-      isOutOfStock || isInsufficient
-        ? { background: "#fffbeb" }
-        : undefined
-    }>
+    <tr className={s.tr} style={isOutOfStock || isInsufficient ? { background: "#fffbeb" } : undefined}>
 
       {/* MPN */}
       <td className={s.td}>
         <div className={s.mpn}>{r.mpn}</div>
-        {wasResolved && (
-          <span className={s.resolvedBadge}>↑ {r.originalCode}</span>
-        )}
+        {wasResolved && <span className={s.resolvedBadge}>↑ {r.originalCode}</span>}
       </td>
 
       {/* Description */}
@@ -114,15 +104,13 @@ function ResultRow({ r, onResolve, prodQty }: {
         </span>
       </td>
 
-      {/* Requested qty — mostra orig × prodQty se in prod mode */}
+      {/* Requested qty */}
       <td className={`${s.td} ${s.tdRight}`}>
         <span style={{ color: "var(--text-2)", fontVariantNumeric: "tabular-nums" }}>
           {r.requestedQty.toLocaleString()}
         </span>
         {isProdMode && (
-          <div className={s.qtyOriginal}>
-            {originalBomQty.toLocaleString()} × {prodQty}
-          </div>
+          <div className={s.qtyOriginal}>{originalBomQty.toLocaleString()} × {prodQty}</div>
         )}
       </td>
 
@@ -209,12 +197,9 @@ function StatCard({ label, value, sub, accent, style }: {
 
 // ── Production Qty Banner ─────────────────────────────────────────────────────
 function ProdQtyBanner({ onApply, isLoading, activeProdQty }: {
-  onApply:       (qty: number) => void;
-  isLoading:     boolean;
-  activeProdQty: number;
+  onApply: (qty: number) => void; isLoading: boolean; activeProdQty: number;
 }) {
   const [value, setValue] = useState(activeProdQty > 1 ? String(activeProdQty) : "");
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleApply = useCallback(() => {
     const qty = parseInt(value, 10);
@@ -233,48 +218,47 @@ function ProdQtyBanner({ onApply, isLoading, activeProdQty }: {
 
   return (
     <div className={s.prodBanner}>
+
       {/* Icon + text */}
       <span className={s.prodBannerIcon}>🏭</span>
       <div className={s.prodBannerText}>
         <div className={s.prodBannerTitle}>Production Run</div>
         <div className={s.prodBannerSub}>
-          Multiply BOM quantities by the number of finished units you want to produce.
-          All stock checks and price breaks are recalculated automatically.
+          Multiply BOM quantities by the number of finished units.
+          Stock checks and price breaks are recalculated automatically.
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Controls — su mobile vanno a capo */}
       <div className={s.prodBannerControls}>
         {activeProdQty > 1 && (
-          <span className={s.prodActiveBadge}>
-            × {activeProdQty} units active
-          </span>
+          <span className={s.prodActiveBadge}>× {activeProdQty} units active</span>
         )}
-        <span className={s.prodBannerLabel}>Units to produce:</span>
-        <input
-          ref={inputRef}
-          type="number"
-          min={1}
-          max={100000}
-          placeholder="e.g. 500"
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className={s.prodInput}
-        />
-        <button
-          className={s.btnApply}
-          onClick={handleApply}
-          disabled={isLoading || !value || parseInt(value) < 1}
-        >
-          {isLoading ? "…" : "Apply ↗"}
-        </button>
-        {activeProdQty > 1 && (
-          <button className={s.btnReset} onClick={handleReset}>
-            Reset
+        <div className={s.prodInputRow}>
+          <span className={s.prodBannerLabel}>Units to produce:</span>
+          <input
+            type="number"
+            min={1}
+            max={100000}
+            placeholder="e.g. 500"
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className={s.prodInput}
+          />
+          <button
+            className={s.btnApply}
+            onClick={handleApply}
+            disabled={isLoading || !value || parseInt(value) < 1}
+          >
+            {isLoading ? "…" : "Apply ↗"}
           </button>
-        )}
+          {activeProdQty > 1 && (
+            <button className={s.btnReset} onClick={handleReset}>Reset</button>
+          )}
+        </div>
       </div>
+
     </div>
   );
 }
@@ -285,7 +269,7 @@ function ResultsContent() {
   const router  = useRouter();
 
   const [data, setData]               = useState<SearchResponse | null>(null);
-  const [baseData, setBaseData]       = useState<SearchResponse | null>(null); // dati originali BOM
+  const [baseData, setBaseData]       = useState<SearchResponse | null>(null);
   const [originalBom, setOriginalBom] = useState<BomRow[]>([]);
   const [loading, setLoading]         = useState(true);
   const [prodLoading, setProdLoading] = useState(false);
@@ -296,25 +280,20 @@ function ResultsContent() {
   useEffect(() => {
     const encoded = params.get("bom");
     if (!encoded) { router.push("/"); return; }
-
     let bom: BomRow[];
     try { bom = JSON.parse(atob(encoded)); }
     catch { router.push("/"); return; }
-
     setOriginalBom(bom);
 
     fetch("/api/search", {
-      method:  "POST",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ bom }),
+      body: JSON.stringify({ bom }),
     })
       .then(r => r.json())
       .then(json => {
         if (json.error) setApiError(json.error);
-        else {
-          setData(json as SearchResponse);
-          setBaseData(json as SearchResponse);  // salva i dati base
-        }
+        else { setData(json as SearchResponse); setBaseData(json as SearchResponse); }
       })
       .catch(() => setApiError("Network error. Please try again."))
       .finally(() => setLoading(false));
@@ -322,43 +301,22 @@ function ResultsContent() {
 
   // ── Apply production qty ──────────────────────────────────────────────────
   const handleApplyProdQty = useCallback(async (prodQty: number) => {
-    if (prodQty === 1) {
-      // Reset ai dati originali
-      setData(baseData);
-      setActiveProdQty(1);
-      return;
-    }
-
+    if (prodQty === 1) { setData(baseData); setActiveProdQty(1); return; }
     setProdLoading(true);
-
-    // Moltiplica le quantità della BOM originale
-    const multipliedBom: BomRow[] = originalBom.map(row => ({
-      ...row,
-      qty: row.qty * prodQty,
-    }));
-
+    const multipliedBom: BomRow[] = originalBom.map(row => ({ ...row, qty: row.qty * prodQty }));
     try {
       const res  = await fetch("/api/search", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ bom: multipliedBom }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bom: multipliedBom }),
       });
       const json = await res.json();
-
-      if (json.error) {
-        setApiError(json.error);
-      } else {
-        setData(json as SearchResponse);
-        setActiveProdQty(prodQty);
-      }
-    } catch {
-      setApiError("Network error. Please try again.");
-    } finally {
-      setProdLoading(false);
-    }
+      if (json.error) setApiError(json.error);
+      else { setData(json as SearchResponse); setActiveProdQty(prodQty); }
+    } catch { setApiError("Network error. Please try again."); }
+    finally { setProdLoading(false); }
   }, [originalBom, baseData]);
 
-  // ── Resolve out-of-stock ──────────────────────────────────────────────────
+  // ── Resolve ───────────────────────────────────────────────────────────────
   function handleResolve(mpn: string) {
     if (!data) return;
     const updatedResults = data.results.map(r => {
@@ -366,23 +324,14 @@ function ResultsContent() {
       const fb = r.stockFallback;
       return {
         ...r,
-        distributor:     fb.distributor,
-        optimalQty:      fb.optimalQty,
-        rounded:         fb.rounded,
-        adjustment:      "none" as AdjustmentType,
-        savedVsOriginal: 0,
-        unitPrice:       fb.unitPrice,
-        totalPrice:      fb.totalPrice,
-        currency:        fb.currency,
-        stock:           fb.stock,
-        productUrl:      fb.productUrl,
-        error:           undefined,
-        stockFallback:   undefined,
+        distributor: fb.distributor, optimalQty: fb.optimalQty,
+        rounded: fb.rounded, adjustment: "none" as AdjustmentType,
+        savedVsOriginal: 0, unitPrice: fb.unitPrice, totalPrice: fb.totalPrice,
+        currency: fb.currency, stock: fb.stock, productUrl: fb.productUrl,
+        error: undefined, stockFallback: undefined,
       } as OptimizedResult;
     });
-    const newTotal = parseFloat(
-      updatedResults.reduce((sum, r) => sum + (r.totalPrice ?? 0), 0).toFixed(2)
-    );
+    const newTotal = parseFloat(updatedResults.reduce((sum, r) => sum + (r.totalPrice ?? 0), 0).toFixed(2));
     setData({ ...data, results: updatedResults, totalBom: newTotal });
   }
 
@@ -415,18 +364,15 @@ function ResultsContent() {
   if (!data) return null;
 
   // ── Derived stats ─────────────────────────────────────────────────────────
-  const found       = data.results.filter(r => !r.error);
-  const outOfStock  = data.results.filter(r => r.error === "Out of stock");
+  const found        = data.results.filter(r => !r.error);
+  const outOfStock   = data.results.filter(r => r.error === "Out of stock");
   const insufficient = data.results.filter(r => r.error === "Insufficient stock for production qty");
-  const notFound    = data.results.filter(r => r.error && r.error !== "Out of stock" && r.error !== "Insufficient stock for production qty");
-  const resolved    = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
-  const adjusted    = data.results.filter(r => r.adjustment && r.adjustment !== "none");
-  const totalSaved  = parseFloat(
-    data.results.reduce((sum, r) => sum + (r.savedVsOriginal ?? 0), 0).toFixed(2)
-  );
-  const distCount = found.reduce((acc, r) => {
-    acc[r.distributor] = (acc[r.distributor] ?? 0) + 1;
-    return acc;
+  const notFound     = data.results.filter(r => r.error && r.error !== "Out of stock" && r.error !== "Insufficient stock for production qty");
+  const resolved     = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
+  const adjusted     = data.results.filter(r => r.adjustment && r.adjustment !== "none");
+  const totalSaved   = parseFloat(data.results.reduce((sum, r) => sum + (r.savedVsOriginal ?? 0), 0).toFixed(2));
+  const distCount    = found.reduce((acc, r) => {
+    acc[r.distributor] = (acc[r.distributor] ?? 0) + 1; return acc;
   }, {} as Record<string, number>);
 
   return (
@@ -472,8 +418,7 @@ function ResultsContent() {
           />
           {totalSaved > 0 && (
             <StatCard
-              label="Optimized savings"
-              value={`$${totalSaved.toFixed(2)}`}
+              label="Optimized savings" value={`$${totalSaved.toFixed(2)}`}
               sub={`${adjusted.length} qty adjusted`}
               style={{ borderColor: "#bbf7d0", background: "#f0fdf4" }}
             />
@@ -502,7 +447,6 @@ function ResultsContent() {
           <div className={s.notice} style={{ background: "#fef2f2", borderColor: "#fecaca", color: "#991b1b" }}>
             <strong>⚠ {insufficient.length} component{insufficient.length > 1 ? "s" : ""} have insufficient stock</strong>
             {" "}for a production run of <strong>{activeProdQty} units</strong>.
-            Consider splitting the order or contacting the distributor directly.
           </div>
         )}
         {resolved.length > 0 && (
@@ -519,13 +463,9 @@ function ResultsContent() {
           activeProdQty={activeProdQty}
         />
 
-        {/* ── Loading overlay for prod recalculation ── */}
         {prodLoading && (
-          <div style={{
-            textAlign: "center", padding: "12px",
-            fontSize: "13px", color: "var(--text-3)",
-            fontFamily: "Inter, sans-serif",
-          }}>
+          <div style={{ textAlign: "center", padding: "12px", fontSize: "13px",
+            color: "var(--text-3)", fontFamily: "Inter, sans-serif" }}>
             Recalculating for {activeProdQty} units…
           </div>
         )}
@@ -539,7 +479,7 @@ function ResultsContent() {
                   <th className={`${s.th} ${s.thLeft}`}>MPN</th>
                   <th className={`${s.th} ${s.thLeft}`}>Description</th>
                   <th className={`${s.th} ${s.thRight}`}>
-                    {activeProdQty > 1 ? "Qty × " + activeProdQty : "Requested"}
+                    {activeProdQty > 1 ? `Qty × ${activeProdQty}` : "Requested"}
                   </th>
                   <th className={`${s.th} ${s.thRight}`}>Buy Qty</th>
                   <th className={`${s.th} ${s.thRight}`}>Unit Price</th>
@@ -561,7 +501,7 @@ function ResultsContent() {
           </div>
         </div>
 
-        {/* ── Legend ── */}
+        {/* ── Legend + Export ── */}
         <div className={s.legend}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {LEGEND_BADGES.map(l => (
@@ -578,9 +518,29 @@ function ResultsContent() {
               </Tooltip>
             ))}
           </div>
-          <span style={{ marginLeft: "auto", color: "var(--text-3)", fontSize: 11 }}>
-            Hover badge for details
-          </span>
+
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
+            <span style={{ color: "var(--text-3)", fontSize: 11 }}>
+              Hover badge for details
+            </span>
+            {/* ── Export to Excel button ── */}
+            <button
+              className={s.btnExport}
+              onClick={() => exportToExcel({
+                results:    data.results,
+                currency:   data.currency,
+                totalBom:   data.totalBom,
+                prodQty:    activeProdQty,
+                searchedAt: data.searchedAt,
+              })}
+            >
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+              </svg>
+              Export to Excel
+            </button>
+          </div>
         </div>
 
       </main>
