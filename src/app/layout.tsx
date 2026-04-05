@@ -1,18 +1,22 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title:       "icpaste.com — Find the best price for your BOM",
-  description: "Paste your BOM, get the best price and stock for every component across Mouser, Digi-Key and Farnell. Instant results, no signup required.",
-  keywords:    ["BOM", "electronic components", "MPN search", "Mouser", "Digikey", "Farnell", "price comparison"],
+  title:       "icpaste.com — Find the best price for every component",
+  description: "Paste your BOM and instantly find the best price across Mouser, Digi-Key and Farnell. Stock checked, quantity optimized.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
   openGraph: {
-    title:       "icpaste.com",
-    description: "Paste your BOM. Get the best price. Click and buy.",
+    title:       "icpaste.com — BOM Price Finder",
+    description: "Find the best price for every electronic component. Paste your BOM, we do the rest.",
     url:         "https://icpaste.com",
     siteName:    "icpaste.com",
+    locale:      "en_US",
     type:        "website",
   },
 };
@@ -24,9 +28,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-gray-950 text-gray-100 antialiased`}>
-        {children}
-      </body>
+      <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="theme-color" content="#0ea5e9" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
