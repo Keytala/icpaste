@@ -1,55 +1,58 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Farnell / element14 Adapter
+//  icpaste.com — Farnell / element14 Adapter (fix)
 //
-//  API Docs: https://partner.element14.com/docs/read/Product_Search_API
-//  Auth:     API Key (query param)
-//  Endpoint: GET https://api.element14.com/catalog/products
+//  Il problema era che i parametri venivano passati in modo errato.
+//  L'API Farnell vuole i parametri come query string semplici, non JSON.
 //
-//  Env vars:
-//    FARNELL_API_KEY        → la tua API key Farnell
-//    FARNELL_STORE          → default "it.farnell.com"
-//    FARNELL_AFFILIATE_PARAM → opzionale
+//  URL corretto:
+//  https://api.element14.com/catalog/products
+//    ?term=manuPartNum:LM358N
+//    &storeInfo.id=it.farnell.com
+//    &resultsSettings.offset=0
+//    &resultsSettings.numberOfResults=10
+//    &resultsSettings.refinements.filters=rohsCompliant
+//    &resultsSettings.sortBy=unitPrice
+//    &resultsSettings.sortOrder=asc
+//    &callInfo.responseDataFormat=json
+//    &callInfo.apiKey=YOUR_KEY
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { DistributorAdapter } from "./adapter.interface";
 import { PartResult, PriceTier } from "../types";
 
 const BASE_URL        = "https://api.element14.com/catalog/products";
-const STORE           = process.env.FARNELL_STORE          ?? "it.farnell.com";
+const STORE           = process.env.FARNELL_STORE           ?? "it.farnell.com";
 const AFFILIATE_PARAM = process.env.FARNELL_AFFILIATE_PARAM ?? "";
 
-// ── Farnell API response types ────────────────────────────────────────────────
 interface FarnellPriceBreak {
-  from:   number;
-  to:     number | string;
-  cost:   number;
+  from:  number;
+  to:    number | string;
+  cost:  number;
 }
 
 interface FarnellProduct {
-  sku:               string;
-  displayName:       string;
+  sku:         string;
+  displayName: string;
   translatedManufacturerPartNumberList?: { manufacturerPartNumber: string }[];
-  stock:             { level: number };
-  unitOfMeasure:     string;
-  packSize:          number;
-  minimumOrderQty:   number;
-  prices:            FarnellPriceBreak[];
-  productURL:        string;
-  currency:          string;
+  stock:       { level: number };
+  packSize:    number;
+  minimumOrderQty: number;
+  prices:      FarnellPriceBreak[];
+  productURL:  string;
+  currency:    string;
 }
 
 interface FarnellApiResponse {
   keywordSearchReturn?: {
-    products:      FarnellProduct[];
+    products:        FarnellProduct[];
     numberOfResults: number;
   };
   manufacturerPartNumberSearchReturn?: {
-    products:      FarnellProduct[];
+    products:        FarnellProduct[];
     numberOfResults: number;
   };
 }
 
-// ── Costruisci URL prodotto Farnell ───────────────────────────────────────────
 function buildFarnellUrl(product: FarnellProduct): string {
   const base = product.productURL
     ? `https://${STORE}${product.productURL}`
@@ -57,7 +60,6 @@ function buildFarnellUrl(product: FarnellProduct): string {
   return AFFILIATE_PARAM ? `${base}${AFFILIATE_PARAM}` : base;
 }
 
-// ── Farnell Adapter ───────────────────────────────────────────────────────────
 export const FarnellAdapter: DistributorAdapter = {
   name: "Farnell",
 
@@ -66,38 +68,34 @@ export const FarnellAdapter: DistributorAdapter = {
     if (!apiKey || apiKey === "placeholder") return [];
 
     try {
-      // Farnell supporta ricerca per MPN diretto
+      // ── Fix: parametri come query string semplici, non JSON ──────────────
       const params = new URLSearchParams({
-        callInfo:    JSON.stringify({
-          apiKey,
-          responseDataFormat: "json",
-          storeInfo: { id: STORE, type: "global", locale: "it_IT" },
-        }),
-        term:        `manuPartNum:${mpn}`,
-        start:       "0",
-        numberOfResults: "10",
-        resultsSettings: JSON.stringify({
-          offset:       0,
-          numberOfResults: 10,
-          refinements:  {},
-          sortBy:       "unitPrice",
-          sortOrder:    "asc",
-        }),
+        "term":                              `manuPartNum:${mpn}`,
+        "storeInfo.id":                      STORE,
+        "storeInfo.type":                    "global",
+        "storeInfo.locale":                  "it_IT",
+        "resultsSettings.offset":            "0",
+        "resultsSettings.numberOfResults":   "10",
+        "resultsSettings.sortBy":            "unitPrice",
+        "resultsSettings.sortOrder":         "asc",
+        "callInfo.responseDataFormat":       "json",
+        "callInfo.apiKey":                   apiKey,
       });
 
-      const response = await fetch(`${BASE_URL}?${params.toString()}`, {
+      const url      = `${BASE_URL}?${params.toString()}`;
+      const response = await fetch(url, {
         method:  "GET",
         headers: { "Accept": "application/json" },
       });
 
       if (!response.ok) {
-        console.error(`[Farnell] HTTP ${response.status}`);
+        const errText = await response.text();
+        console.error(`[Farnell] HTTP ${response.status}:`, errText.slice(0, 200));
         return [];
       }
 
       const json = await response.json() as FarnellApiResponse;
 
-      // Prova prima MPN search, poi keyword search
       const products =
         json.manufacturerPartNumberSearchReturn?.products ??
         json.keywordSearchReturn?.products ??
@@ -107,19 +105,14 @@ export const FarnellAdapter: DistributorAdapter = {
         .filter(p => p.prices && p.prices.length > 0)
         .map((p): PartResult => {
           const priceTiers: PriceTier[] = p.prices
-            .map(pb => ({
-              qty:   pb.from,
-              price: pb.cost,
-            }))
+            .map(pb => ({ qty: pb.from, price: pb.cost }))
             .filter(t => t.price > 0)
             .sort((a, b) => a.qty - b.qty);
 
-          // packageUnit: usa packSize se > 1, altrimenti minimumOrderQty
           const packageUnit = p.packSize > 1
             ? p.packSize
             : (p.minimumOrderQty || 1);
 
-          // Recupera MPN dal prodotto se disponibile
           const productMpn =
             p.translatedManufacturerPartNumberList?.[0]?.manufacturerPartNumber
             ?? mpn;
