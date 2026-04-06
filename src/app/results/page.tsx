@@ -23,8 +23,8 @@ function ds(name: string) {
 
 // ── Badge Config ──────────────────────────────────────────────────────────────
 const BADGE_CONFIG: Record<string, {
-  label:  string; bg: string; color: string; border: string;
-  title:  string; detail: (req: number, opt: number) => string;
+  label: string; bg: string; color: string; border: string;
+  title: string; detail: (req: number, opt: number) => string;
 }> = {
   package: {
     label: "PKG", bg: "#fffbeb", color: "#d97706", border: "#fde68a",
@@ -44,12 +44,11 @@ const BADGE_CONFIG: Record<string, {
 };
 
 const LEGEND_BADGES = [
-  { label: "PKG",      bg: "#fffbeb", color: "#d97706", border: "#fde68a", title: "Package unit adjusted",   detail: "Qty rounded to nearest reel / tray size" },
-  { label: "STEP",     bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", title: "Better price tier",        detail: "Qty increased to reach a cheaper price break" },
-  { label: "PKG+STEP", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff", title: "Package + price tier",     detail: "Both package unit and price break applied" },
+  { label: "PKG",      bg: "#fffbeb", color: "#d97706", border: "#fde68a", title: "Package unit adjusted",  detail: "Qty rounded to nearest reel / tray size" },
+  { label: "STEP",     bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", title: "Better price tier",       detail: "Qty increased to reach a cheaper price break" },
+  { label: "PKG+STEP", bg: "#faf5ff", color: "#7c3aed", border: "#e9d5ff", title: "Package + price tier",    detail: "Both package unit and price break applied" },
 ];
 
-// ── Badge pill style ──────────────────────────────────────────────────────────
 function badgePill(color: string, bg: string, border: string): React.CSSProperties {
   return {
     display: "inline-block", fontSize: "9px", fontWeight: 700,
@@ -199,13 +198,20 @@ function ResultsContent() {
   const params = useSearchParams();
   const router = useRouter();
 
-  const [data, setData]               = useState<SearchResponse | null>(null);
-  const [origData, setOrigData]       = useState<SearchResponse | null>(null);
-  const [loading, setLoading]         = useState(true);
-  const [apiError, setApiError]       = useState("");
-  const [prodQtyInput, setProdQtyInput] = useState("");
-  const [activeProdQty, setActiveProdQty] = useState(1);
+  const [data, setData]                     = useState<SearchResponse | null>(null);
+  const [origData, setOrigData]             = useState<SearchResponse | null>(null);
+  const [loading, setLoading]               = useState(true);
+  const [apiError, setApiError]             = useState("");
+  const [prodQtyInput, setProdQtyInput]     = useState("");
+  const [activeProdQty, setActiveProdQty]   = useState(1);
   const [isRecalculating, setIsRecalculating] = useState(false);
+
+  // ── Calcola savings da data corrente ─────────────────────────────────────
+  function calcSavings(results: OptimizedResult[]) {
+    return parseFloat(
+      results.reduce((s, r) => s + (r.savedVsOriginal ?? 0), 0).toFixed(2)
+    );
+  }
 
   useEffect(() => {
     const encoded = params.get("bom");
@@ -259,7 +265,6 @@ function ResultsContent() {
 
     setIsRecalculating(true);
 
-    // Moltiplica le quantità originali per il moltiplicatore
     const multipliedBom = origData.results.map(r => ({
       rawCode:   r.mpn,
       qty:       r.requestedQty * qty,
@@ -278,13 +283,13 @@ function ResultsContent() {
         setActiveProdQty(qty);
       }
     } catch {
-      // fallback silenzioso
+      // silent fallback
     } finally {
       setIsRecalculating(false);
     }
   }, [origData, prodQtyInput]);
 
-  // ── Reset Production Run ──────────────────────────────────────────────────
+  // ── Reset ─────────────────────────────────────────────────────────────────
   function handleReset() {
     if (!origData) return;
     setData(origData);
@@ -320,14 +325,17 @@ function ResultsContent() {
 
   if (!data) return null;
 
-  // ── Derived stats ─────────────────────────────────────────────────────────
+  // ── Derived stats — ricalcolate sempre da data corrente ───────────────────
   const found      = data.results.filter(r => !r.error);
   const outOfStock = data.results.filter(r => r.error === "Out of stock");
   const notFound   = data.results.filter(r => r.error && r.error !== "Out of stock");
   const resolved   = data.results.filter(r => r.originalCode && r.originalCode !== r.mpn);
   const adjusted   = data.results.filter(r => r.adjustment && r.adjustment !== "none");
-  const totalSaved = parseFloat(data.results.reduce((s, r) => s + (r.savedVsOriginal ?? 0), 0).toFixed(2));
-  const distCount  = found.reduce((acc, r) => {
+
+  // ── FIX: savings calcolate sempre da data corrente, non da origData ───────
+  const totalSaved = calcSavings(data.results);
+
+  const distCount = found.reduce((acc, r) => {
     acc[r.distributor] = (acc[r.distributor] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -362,22 +370,42 @@ function ResultsContent() {
 
       <main className={s.main}>
 
-        {/* ── Stats ── */}
+        {/* ── Stats — sempre aggiornate ── */}
         <div className={s.stats}>
-          <StatCard label="BOM Total" value={`${data.currency} ${data.totalBom.toFixed(2)}`} sub="estimated cost" accent />
-          <StatCard label="Found"     value={`${found.length} / ${data.results.length}`}      sub="components with stock" />
+          <StatCard
+            label="BOM Total"
+            value={`${data.currency} ${data.totalBom.toFixed(2)}`}
+            sub={activeProdQty > 1 ? `× ${activeProdQty} units · ${data.currency} ${(data.totalBom / activeProdQty).toFixed(2)}/unit` : "estimated cost"}
+            accent
+          />
+          <StatCard
+            label="Found"
+            value={`${found.length} / ${data.results.length}`}
+            sub="components with stock"
+          />
+          {/* FIX: mostra sempre la card savings se > 0, anche dopo ricalcolo */}
           {totalSaved > 0 && (
-            <StatCard label="Optimized savings" value={`$${totalSaved.toFixed(2)}`}
+            <StatCard
+              label="Optimized savings"
+              value={`$${totalSaved.toFixed(2)}`}
               sub={`${adjusted.length} qty adjusted`}
-              cardStyle={{ borderColor: "#bbf7d0", background: "#f0fdf4" }} />
+              cardStyle={{ borderColor: "#bbf7d0", background: "#f0fdf4" }}
+            />
           )}
           {outOfStock.length > 0 && (
-            <StatCard label="Out of stock" value={`${outOfStock.length}`}
+            <StatCard
+              label="Out of stock"
+              value={`${outOfStock.length}`}
               sub="click Resolve to fix"
-              cardStyle={{ borderColor: "#fde68a", background: "#fffbeb" }} />
+              cardStyle={{ borderColor: "#fde68a", background: "#fffbeb" }}
+            />
           )}
           {notFound.length > 0 && (
-            <StatCard label="Not found" value={`${notFound.length}`} sub="check MPN manually" />
+            <StatCard
+              label="Not found"
+              value={`${notFound.length}`}
+              sub="check MPN manually"
+            />
           )}
         </div>
 
@@ -399,12 +427,12 @@ function ResultsContent() {
                 )}
               </div>
               <div className={s.productionBannerDesc}>
-                Multiply BOM quantities by the number of finished units. Stock checks and price breaks are recalculated automatically.
+                Multiply BOM quantities by finished units. Stock and price breaks recalculated automatically.
               </div>
             </div>
           </div>
           <div className={s.productionBannerRight}>
-            <span className={s.productionLabel}>Units to produce:</span>
+            <span className={s.productionLabel}>Units:</span>
             <input
               type="number"
               min="1"
