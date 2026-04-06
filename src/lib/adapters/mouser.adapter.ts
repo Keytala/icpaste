@@ -1,36 +1,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Mouser Adapter
+//  icpaste.com — Mouser Adapter (fix)
 //
-//  API Docs: https://api.mouser.com/api-hub/
-//  Auth:     API Key (header o query param)
-//  Endpoint: POST https://api.mouser.com/api/v1/search/keyword
-//
-//  Env vars:
-//    MOUSER_API_KEY         → la tua API key Mouser
-//    MOUSER_AFFILIATE_PARAM → es. ?ref=XXXXX (opzionale)
+//  searchOptions values:
+//  "1" = keyword search
+//  "2" = by manufacturer part number (MPN) ← quello che vogliamo
+//  "4" = by Mouser part number
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { DistributorAdapter } from "./adapter.interface";
 import { PartResult, PriceTier } from "../types";
 
-const BASE_URL        = "https://api.mouser.com/api/v1";
 const AFFILIATE_PARAM = process.env.MOUSER_AFFILIATE_PARAM ?? "";
 
-// ── Mouser API response types ─────────────────────────────────────────────────
 interface MouserPriceBreak {
   Quantity: number;
-  Price:    string;   // es. "0,3200 €" o "$0.3200"
+  Price:    string;
   Currency: string;
 }
 
 interface MouserPart {
   ManufacturerPartNumber: string;
   Description:            string;
-  Availability:           string;   // es. "12,400 In Stock"
-  Min:                    string;   // quantità minima
-  Mult:                   string;   // multiplo
+  Availability:           string;
+  Min:                    string;
+  Mult:                   string;
   PriceBreaks:            MouserPriceBreak[];
-  MouserPartNumber:       string;
   ProductDetailUrl:       string;
 }
 
@@ -42,18 +36,13 @@ interface MouserApiResponse {
   Errors?: { Message: string }[];
 }
 
-// ── Parse prezzo Mouser (es. "0,3200 €" → 0.32) ──────────────────────────────
 function parseMouserPrice(priceStr: string): number {
   if (!priceStr) return 0;
-  // Rimuovi simboli valuta e spazi, sostituisci virgola con punto
-  const cleaned = priceStr
-    .replace(/[€$£¥\s]/g, "")
-    .replace(",", ".");
-  const value = parseFloat(cleaned);
+  const cleaned = priceStr.replace(/[€$£¥\s]/g, "").replace(",", ".");
+  const value   = parseFloat(cleaned);
   return isNaN(value) ? 0 : value;
 }
 
-// ── Parse stock Mouser (es. "12,400 In Stock" → 12400) ───────────────────────
 function parseMouserStock(availStr: string): number {
   if (!availStr) return 0;
   const match = availStr.match(/[\d,]+/);
@@ -61,7 +50,6 @@ function parseMouserStock(availStr: string): number {
   return parseInt(match[0].replace(/,/g, ""), 10);
 }
 
-// ── Costruisci URL prodotto Mouser ────────────────────────────────────────────
 function buildMouserUrl(part: MouserPart): string {
   const base = part.ProductDetailUrl
     ? `https://www.mouser.com${part.ProductDetailUrl}`
@@ -69,7 +57,6 @@ function buildMouserUrl(part: MouserPart): string {
   return AFFILIATE_PARAM ? `${base}${AFFILIATE_PARAM}` : base;
 }
 
-// ── Mouser Adapter ────────────────────────────────────────────────────────────
 export const MouserAdapter: DistributorAdapter = {
   name: "Mouser",
 
@@ -79,16 +66,16 @@ export const MouserAdapter: DistributorAdapter = {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/search/keyword?apiKey=${apiKey}`,
+        `https://api.mouser.com/api/v1/search/keyword?apiKey=${apiKey}`,
         {
           method:  "POST",
           headers: { "Content-Type": "application/json", "Accept": "application/json" },
           body: JSON.stringify({
             SearchByKeywordRequest: {
-              keyword:       mpn,
-              records:       10,
+              keyword:        mpn,
+              records:        10,
               startingRecord: 0,
-              searchOptions: "6",   // 6 = cerca per MPN esatto
+              searchOptions:  "2",    // ← fix: "2" = MPN search
               searchWithYourSignUpLanguage: "false",
             },
           }),
@@ -120,10 +107,10 @@ export const MouserAdapter: DistributorAdapter = {
             .filter(t => t.price > 0)
             .sort((a, b) => a.qty - b.qty);
 
-          const currency = p.PriceBreaks[0]?.Currency ?? "USD";
-          const stock    = parseMouserStock(p.Availability);
-          const minQty   = parseInt(p.Min  || "1", 10) || 1;
-          const multQty  = parseInt(p.Mult || "1", 10) || 1;
+          const currency    = p.PriceBreaks[0]?.Currency ?? "USD";
+          const stock       = parseMouserStock(p.Availability);
+          const minQty      = parseInt(p.Min  || "1", 10) || 1;
+          const multQty     = parseInt(p.Mult || "1", 10) || 1;
           const packageUnit = Math.max(minQty, multQty);
 
           return {
