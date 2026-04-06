@@ -1,18 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Digi-Key Adapter
-//
-//  API Docs: https://developer.digikey.com
-//  Auth:     OAuth2 Client Credentials (machine-to-machine)
-//  Token:    POST https://api.digikey.com/v1/oauth2/token
-//  Search:   POST https://api.digikey.com/products/v4/search/keyword
-//
-//  Env vars:
-//    DIGIKEY_CLIENT_ID      → il tuo Client ID
-//    DIGIKEY_CLIENT_SECRET  → il tuo Client Secret
-//    DIGIKEY_AFFILIATE_PARAM → opzionale
-//    DIGIKEY_LOCALE_SITE    → default IT
-//    DIGIKEY_LOCALE_LANGUAGE → default it
-//    DIGIKEY_LOCALE_CURRENCY → default EUR
+//  icpaste.com — Digi-Key Adapter (fix endpoint v4)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { DistributorAdapter } from "./adapter.interface";
@@ -20,22 +7,17 @@ import { PartResult, PriceTier } from "../types";
 
 const BASE_URL        = "https://api.digikey.com";
 const TOKEN_URL       = `${BASE_URL}/v1/oauth2/token`;
-const SEARCH_URL      = `${BASE_URL}/products/v4/search/keyword`;
-const AFFILIATE_PARAM = process.env.DIGIKEY_AFFILIATE_PARAM ?? "";
+const AFFILIATE_PARAM = process.env.DIGIKEY_AFFILIATE_PARAM  ?? "";
+const LOCALE_SITE     = process.env.DIGIKEY_LOCALE_SITE      ?? "IT";
+const LOCALE_LANGUAGE = process.env.DIGIKEY_LOCALE_LANGUAGE  ?? "it";
+const LOCALE_CURRENCY = process.env.DIGIKEY_LOCALE_CURRENCY  ?? "EUR";
 
-const LOCALE_SITE     = process.env.DIGIKEY_LOCALE_SITE     ?? "IT";
-const LOCALE_LANGUAGE = process.env.DIGIKEY_LOCALE_LANGUAGE ?? "it";
-const LOCALE_CURRENCY = process.env.DIGIKEY_LOCALE_CURRENCY ?? "EUR";
-
-// ── Token cache — evita di richiedere un token ad ogni chiamata ───────────────
-let cachedToken: string | null   = null;
-let tokenExpiry: number          = 0;
+// ── Token cache ───────────────────────────────────────────────────────────────
+let cachedToken: string | null = null;
+let tokenExpiry: number        = 0;
 
 async function getAccessToken(clientId: string, clientSecret: string): Promise<string> {
-  // Usa il token cached se ancora valido (con 60s di margine)
-  if (cachedToken && Date.now() < tokenExpiry - 60_000) {
-    return cachedToken;
-  }
+  if (cachedToken && Date.now() < tokenExpiry - 60_000) return cachedToken;
 
   const response = await fetch(TOKEN_URL, {
     method:  "POST",
@@ -48,20 +30,20 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
   });
 
   if (!response.ok) {
-    throw new Error(`[DigiKey] Token error: ${response.status} ${response.statusText}`);
+    const err = await response.text();
+    throw new Error(`[DigiKey] Token error ${response.status}: ${err}`);
   }
 
-  const json = await response.json();
+  const json  = await response.json();
   cachedToken = json.access_token;
   tokenExpiry = Date.now() + (json.expires_in * 1000);
   return cachedToken!;
 }
 
-// ── DigiKey API response types ────────────────────────────────────────────────
+// ── DigiKey API types ─────────────────────────────────────────────────────────
 interface DigiKeyPriceBreak {
   BreakQuantity: number;
   UnitPrice:     number;
-  TotalPrice:    number;
 }
 
 interface DigiKeyProduct {
@@ -70,89 +52,78 @@ interface DigiKeyProduct {
   QuantityAvailable:         number;
   MinimumOrderQuantity:      number;
   StandardPackage:           number;
-  UnitPrice:                 number;
   StandardPricing:           DigiKeyPriceBreak[];
   ProductUrl:                string;
   Currency:                  string;
 }
 
 interface DigiKeySearchResponse {
-  Products:       DigiKeyProduct[];
+  Products:         DigiKeyProduct[];
   TotalResultCount: number;
 }
 
-// ── Costruisci URL prodotto DigiKey ───────────────────────────────────────────
 function buildDigikeyUrl(product: DigiKeyProduct): string {
-  const base = product.ProductUrl ?? `https://www.digikey.it/products/it?keywords=${encodeURIComponent(product.ManufacturerProductNumber)}`;
+  const base = product.ProductUrl
+    ?? `https://www.digikey.it/products/it?keywords=${encodeURIComponent(product.ManufacturerProductNumber)}`;
   return AFFILIATE_PARAM ? `${base}${AFFILIATE_PARAM}` : base;
 }
 
-// ── DigiKey Adapter ───────────────────────────────────────────────────────────
 export const DigikeyAdapter: DistributorAdapter = {
   name: "Digi-Key",
 
-  async search(mpn: string, _qty: number): Promise<PartResult[]> {
+  async search(mpn: string, qty: number): Promise<PartResult[]> {
     const clientId     = process.env.DIGIKEY_CLIENT_ID;
     const clientSecret = process.env.DIGIKEY_CLIENT_SECRET;
 
     if (!clientId || !clientSecret ||
-        clientId === "placeholder" || clientSecret === "placeholder") {
-      return [];
-    }
+        clientId === "placeholder" || clientSecret === "placeholder") return [];
 
     try {
-      // 1. Ottieni access token
       const token = await getAccessToken(clientId, clientSecret);
 
-      // 2. Cerca il prodotto
-      const response = await fetch(SEARCH_URL, {
-        method:  "POST",
-        headers: {
-          "Content-Type":        "application/json",
-          "Accept":              "application/json",
-          "Authorization":       `Bearer ${token}`,
-          "X-DIGIKEY-Client-Id": clientId,
-          "X-DIGIKEY-Locale-Site":     LOCALE_SITE,
-          "X-DIGIKEY-Locale-Language": LOCALE_LANGUAGE,
-          "X-DIGIKEY-Locale-Currency": LOCALE_CURRENCY,
-        },
-        body: JSON.stringify({
-          Keywords:         mpn,
-          RecordCount:      10,
-          RecordStartPos:   0,
-          Filters:          {},
-          Sort:             { SortOption: "SortByUnitPrice", Direction: "Ascending", SortParameterId: 0 },
-          RequestedQuantity: _qty,
-          SearchOptions:    ["ManufacturerPartSearch"],
-        }),
-      });
+      // ── Fix: usa l'endpoint corretto v4 ──────────────────────────────────
+      const response = await fetch(
+        `${BASE_URL}/products/v4/search/keyword`,
+        {
+          method:  "POST",
+          headers: {
+            "Content-Type":              "application/json",
+            "Accept":                    "application/json",
+            "Authorization":             `Bearer ${token}`,
+            "X-DIGIKEY-Client-Id":       clientId,
+            "X-DIGIKEY-Locale-Site":     LOCALE_SITE,
+            "X-DIGIKEY-Locale-Language": LOCALE_LANGUAGE,
+            "X-DIGIKEY-Locale-Currency": LOCALE_CURRENCY,
+          },
+          body: JSON.stringify({
+            Keywords:          mpn,
+            RecordCount:       10,
+            RecordStartPos:    0,
+            RequestedQuantity: qty,
+            SearchOptions:     ["ManufacturerPartSearch"],
+            SortOptions:       [{ Field: "UnitPrice", SortOrder: "Ascending" }],
+          }),
+        }
+      );
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error(`[DigiKey] HTTP ${response.status}:`, errText);
-        // Se token scaduto, resetta la cache
-        if (response.status === 401) {
-          cachedToken = null;
-          tokenExpiry = 0;
-        }
+        console.error(`[DigiKey] HTTP ${response.status}:`, errText.slice(0, 200));
+        if (response.status === 401) { cachedToken = null; tokenExpiry = 0; }
         return [];
       }
 
-      const json = await response.json() as DigiKeySearchResponse;
+      const json     = await response.json() as DigiKeySearchResponse;
       const products = json.Products ?? [];
 
       return products
         .filter(p => p.StandardPricing && p.StandardPricing.length > 0)
         .map((p): PartResult => {
           const priceTiers: PriceTier[] = p.StandardPricing
-            .map(pb => ({
-              qty:   pb.BreakQuantity,
-              price: pb.UnitPrice,
-            }))
+            .map(pb => ({ qty: pb.BreakQuantity, price: pb.UnitPrice }))
             .filter(t => t.price > 0)
             .sort((a, b) => a.qty - b.qty);
 
-          // packageUnit: usa StandardPackage se > 1, altrimenti MinimumOrderQuantity
           const packageUnit = p.StandardPackage > 1
             ? p.StandardPackage
             : (p.MinimumOrderQuantity || 1);
