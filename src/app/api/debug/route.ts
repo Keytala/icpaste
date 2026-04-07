@@ -11,7 +11,7 @@ export async function GET() {
   }
 
   try {
-    // ── 1. Token ─────────────────────────────────────────────────────────────
+    // ── Token ─────────────────────────────────────────────────────────────────
     const tokenRes = await fetch("https://api.digikey.com/v1/oauth2/token", {
       method:  "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -24,7 +24,7 @@ export async function GET() {
     const tokenJson = await tokenRes.json();
     const token     = tokenJson.access_token;
 
-    // ── 2. Search ─────────────────────────────────────────────────────────────
+    // ── Search ────────────────────────────────────────────────────────────────
     const searchRes = await fetch(
       "https://api.digikey.com/products/v4/search/keyword",
       {
@@ -50,39 +50,22 @@ export async function GET() {
 
     const json = await searchRes.json();
     const p    = json?.Products?.[0];
+    const v    = p?.ProductVariations?.[0];
 
-    if (!p) {
-      return NextResponse.json({ error: "No products returned", raw: json });
-    }
-
-    // ── 3. Mostra struttura completa del primo prodotto ───────────────────────
+    // ── Mostra TUTTE le chiavi del prodotto e della variazione ────────────────
     return NextResponse.json({
-      status:           searchRes.status,
-      totalResults:     json.TotalResultCount,
-      firstProduct: {
-        mpn:              p.ManufacturerProductNumber,
-        quantityAvailable: p.QuantityAvailable,
-        minimumOrderQty:  p.MinimumOrderQuantity,
-        standardPackage:  p.StandardPackage,
-        unitPrice:        p.UnitPrice,
-        currency:         p.Currency,
-
-        // Root StandardPricing
-        rootStandardPricing: p.StandardPricing ?? "undefined",
-
-        // ProductVariations
-        variationsCount:  p.ProductVariations?.length ?? 0,
-        variations: (p.ProductVariations ?? []).map((v: {
-          DigiKeyProductNumber: string;
-          PackageType:          { Name: string };
-          QuantityAvailable:    number;
-          StandardPricing:      { BreakQuantity: number; UnitPrice: number }[];
-        }) => ({
-          partNumber:      v.DigiKeyProductNumber,
-          packageType:     v.PackageType?.Name,
-          qty:             v.QuantityAvailable,
-          standardPricing: v.StandardPricing,
-        })),
+      productKeys:   p ? Object.keys(p) : [],
+      variationKeys: v ? Object.keys(v) : [],
+      // Mostra il valore esatto di ogni campo pricing
+      pricing: {
+        "p.StandardPricing":          p?.StandardPricing,
+        "p.standardPricing":          p?.standardPricing,
+        "v.StandardPricing":          v?.StandardPricing,
+        "v.standardPricing":          v?.standardPricing,
+        "v.MyPricing":                v?.MyPricing,
+        "p.UnitPrice":                p?.UnitPrice,
+        // Dump completo della variazione per vedere tutti i campi
+        fullVariation:                v,
       },
     });
 
