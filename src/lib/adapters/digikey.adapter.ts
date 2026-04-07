@@ -1,5 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Digi-Key Adapter (fix endpoint v4)
+//  icpaste.com — Digi-Key Adapter
+//
+//  FIX: StandardPricing è dentro ProductVariations[0], non sul prodotto root
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { DistributorAdapter } from "./adapter.interface";
@@ -44,6 +46,14 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
 interface DigiKeyPriceBreak {
   BreakQuantity: number;
   UnitPrice:     number;
+  TotalPrice:    number;
+}
+
+interface DigiKeyVariation {
+  DigiKeyProductNumber: string;
+  PackageType:          { Id: number; Name: string };
+  StandardPricing:      DigiKeyPriceBreak[];
+  QuantityAvailable?:   number;
 }
 
 interface DigiKeyProduct {
@@ -52,7 +62,9 @@ interface DigiKeyProduct {
   QuantityAvailable:         number;
   MinimumOrderQuantity:      number;
   StandardPackage:           number;
-  StandardPricing:           DigiKeyPriceBreak[];
+  UnitPrice:                 number;
+  StandardPricing:           DigiKeyPriceBreak[];   // spesso vuoto nel root
+  ProductVariations:         DigiKeyVariation[];    // ← qui ci sono i prezzi reali
   ProductUrl:                string;
   Currency:                  string;
 }
@@ -68,6 +80,40 @@ function buildDigikeyUrl(product: DigiKeyProduct): string {
   return AFFILIATE_PARAM ? `${base}${AFFILIATE_PARAM}` : base;
 }
 
+// ── Estrai i price tiers — prima da root, poi da Variations ──────────────────
+function extractPriceTiers(product: DigiKeyProduct): PriceTier[] {
+  // 1. Prova prima StandardPricing sul prodotto root
+  if (product.StandardPricing && product.StandardPricing.length > 0) {
+    const tiers = product.StandardPricing
+      .map(pb => ({ qty: pb.BreakQuantity, price: pb.UnitPrice }))
+      .filter(t => t.price > 0)
+      .sort((a, b) => a.qty - b.qty);
+    if (tiers.length > 0) return tiers;
+  }
+
+  // 2. Fallback: prendi i prezzi dalla prima variazione disponibile
+  //    (DigiKey v4 mette i prezzi dentro ProductVariations[0].StandardPricing)
+  if (product.ProductVariations && product.ProductVariations.length > 0) {
+    for (const variation of product.ProductVariations) {
+      if (variation.StandardPricing && variation.StandardPricing.length > 0) {
+        const tiers = variation.StandardPricing
+          .map(pb => ({ qty: pb.BreakQuantity, price: pb.UnitPrice }))
+          .filter(t => t.price > 0)
+          .sort((a, b) => a.qty - b.qty);
+        if (tiers.length > 0) return tiers;
+      }
+    }
+  }
+
+  // 3. Ultimo fallback: usa UnitPrice del root come tier unico
+  if (product.UnitPrice && product.UnitPrice > 0) {
+    return [{ qty: 1, price: product.UnitPrice }];
+  }
+
+  return [];
+}
+
+// ── DigiKey Adapter ───────────────────────────────────────────────────────────
 export const DigikeyAdapter: DistributorAdapter = {
   name: "Digi-Key",
 
@@ -81,7 +127,6 @@ export const DigikeyAdapter: DistributorAdapter = {
     try {
       const token = await getAccessToken(clientId, clientSecret);
 
-      // ── Fix: usa l'endpoint corretto v4 ──────────────────────────────────
       const response = await fetch(
         `${BASE_URL}/products/v4/search/keyword`,
         {
@@ -117,28 +162,32 @@ export const DigikeyAdapter: DistributorAdapter = {
       const products = json.Products ?? [];
 
       return products
-        .filter(p => p.StandardPricing && p.StandardPricing.length > 0)
-        .map((p): PartResult => {
-          const priceTiers: PriceTier[] = p.StandardPricing
-            .map(pb => ({ qty: pb.BreakQuantity, price: pb.UnitPrice }))
-            .filter(t => t.price > 0)
-            .sort((a, b) => a.qty - b.qty);
+        .map((p): PartResult | null => {
+          const priceTiers = extractPriceTiers(p);
+          if (priceTiers.length === 0) return null;
 
-          const packageUnit = p.StandardPackage > 1
+          // packageUnit: StandardPackage > 1, altrimenti MinimumOrderQuantity
+          const packageUnit = (p.StandardPackage ?? 0) > 1
             ? p.StandardPackage
             : (p.MinimumOrderQuantity || 1);
+
+          // Stock: usa QuantityAvailable del root o della prima variazione
+          const stock = p.QuantityAvailable
+            ?? p.ProductVariations?.[0]?.QuantityAvailable
+            ?? 0;
 
           return {
             mpn:         p.ManufacturerProductNumber,
             description: p.Description?.ProductDescription ?? "",
-            stock:       p.QuantityAvailable ?? 0,
+            stock,
             packageUnit,
             priceTiers,
             productUrl:  buildDigikeyUrl(p),
             currency:    p.Currency ?? LOCALE_CURRENCY,
             distributor: "Digi-Key",
           };
-        });
+        })
+        .filter((p): p is PartResult => p !== null);
 
     } catch (err) {
       console.error(`[DigiKey] Error searching ${mpn}:`, err);
