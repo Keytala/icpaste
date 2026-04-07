@@ -29,48 +29,57 @@ export async function GET() {
         }
       );
       const text = await res.text();
-      mouserResult = { status: res.status, body: text.slice(0, 800) };
+      mouserResult = { status: res.status, body: text.slice(0, 500) };
     } catch (e: unknown) {
       mouserResult = { error: e instanceof Error ? e.message : String(e) };
     }
   }
 
-  // ── Farnell — fix userinfo.apiKey ─────────────────────────────────────────
-  let farnellResult: unknown = "not tested";
-  if (farnellKey && farnellKey !== "placeholder") {
-    try {
-      const params = new URLSearchParams({
-        "term":                            "manuPartNum:LM358N",
-        "storeInfo.id":                    "it.farnell.com",
-        "storeInfo.type":                  "global",
-        "storeInfo.locale":                "it_IT",
-        "resultsSettings.offset":          "0",
-        "resultsSettings.numberOfResults": "3",
-        "resultsSettings.sortBy":          "unitPrice",
-        "resultsSettings.sortOrder":       "asc",
-        "callInfo.responseDataFormat":     "json",
-        "userinfo.apiKey":                 farnellKey,
-      });
+  // ── Farnell — testa 3 store diversi ──────────────────────────────────────
+  const farnellStores = [
+    "it.farnell.com",
+    "uk.farnell.com",
+    "www.farnell.com",
+  ];
 
-      const url = `https://api.element14.com/catalog/products?${params.toString()}`;
-      const res = await fetch(url, { headers: { "Accept": "application/json" } });
-      const text = await res.text();
-      farnellResult = {
-        status:       res.status,
-        contentType:  res.headers.get("content-type"),
-        body:         text.slice(0, 800),
-      };
-    } catch (e: unknown) {
-      farnellResult = { error: e instanceof Error ? e.message : String(e) };
+  const farnellResults: Record<string, unknown> = {};
+
+  if (farnellKey && farnellKey !== "placeholder") {
+    for (const store of farnellStores) {
+      try {
+        const params = new URLSearchParams({
+          "term":                            "manuPartNum:LM358N",
+          "storeInfo.id":                    store,
+          "storeInfo.type":                  "global",
+          "storeInfo.locale":                "it_IT",
+          "resultsSettings.offset":          "0",
+          "resultsSettings.numberOfResults": "2",
+          "resultsSettings.sortBy":          "unitPrice",
+          "resultsSettings.sortOrder":       "asc",
+          "callInfo.responseDataFormat":     "json",
+          "userinfo.apiKey":                 farnellKey,
+        });
+
+        const url = `https://api.element14.com/catalog/products?${params.toString()}`;
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        const text = await res.text();
+        farnellResults[store] = {
+          status:      res.status,
+          contentType: res.headers.get("content-type"),
+          body:        text.slice(0, 300),
+        };
+      } catch (e: unknown) {
+        farnellResults[store] = { error: e instanceof Error ? e.message : String(e) };
+      }
     }
   }
 
-  // ── DigiKey search ────────────────────────────────────────────────────────
+  // ── DigiKey ───────────────────────────────────────────────────────────────
   let digikeyResult: unknown = "not tested";
   if (digikeyId && digikeySecret &&
       digikeyId !== "placeholder" && digikeySecret !== "placeholder") {
     try {
-      const tokenRes  = await fetch("https://api.digikey.com/v1/oauth2/token", {
+      const tokenRes = await fetch("https://api.digikey.com/v1/oauth2/token", {
         method:  "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -108,12 +117,16 @@ export async function GET() {
       digikeyResult = {
         status:      searchRes.status,
         contentType: searchRes.headers.get("content-type"),
-        body:        text.slice(0, 800),
+        body:        text.slice(0, 400),
       };
     } catch (e: unknown) {
       digikeyResult = { error: e instanceof Error ? e.message : String(e) };
     }
   }
 
-  return NextResponse.json({ mouser: mouserResult, farnell: farnellResult, digikey: digikeyResult });
+  return NextResponse.json({
+    mouser:  mouserResult,
+    farnell: farnellResults,
+    digikey: digikeyResult,
+  });
 }
