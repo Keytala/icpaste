@@ -6,7 +6,6 @@ export async function GET() {
   const mousserKey    = process.env.MOUSER_API_KEY;
   const digikeyId     = process.env.DIGIKEY_CLIENT_ID;
   const digikeySecret = process.env.DIGIKEY_CLIENT_SECRET;
-  const farnellKey    = process.env.FARNELL_API_KEY;
 
   // ── Mouser ────────────────────────────────────────────────────────────────
   let mouserResult: unknown = "not tested";
@@ -28,57 +27,29 @@ export async function GET() {
           }),
         }
       );
-      const text = await res.text();
-      mouserResult = { status: res.status, body: text.slice(0, 500) };
+      const json = await res.json();
+      mouserResult = {
+        status:        res.status,
+        numberOfResult: json?.SearchResults?.NumberOfResult,
+        firstPart: json?.SearchResults?.Parts?.[0] ? {
+          mpn:         json.SearchResults.Parts[0].ManufacturerPartNumber,
+          stock:       json.SearchResults.Parts[0].Availability,
+          min:         json.SearchResults.Parts[0].Min,
+          mult:        json.SearchResults.Parts[0].Mult,
+          priceBreaks: json.SearchResults.Parts[0].PriceBreaks?.slice(0, 3),
+        } : "no parts",
+      };
     } catch (e: unknown) {
       mouserResult = { error: e instanceof Error ? e.message : String(e) };
     }
   }
 
-  // ── Farnell — testa 3 store diversi ──────────────────────────────────────
-  const farnellStores = [
-    "it.farnell.com",
-    "uk.farnell.com",
-    "www.farnell.com",
-  ];
-
-  const farnellResults: Record<string, unknown> = {};
-
-  if (farnellKey && farnellKey !== "placeholder") {
-    for (const store of farnellStores) {
-      try {
-        const params = new URLSearchParams({
-          "term":                            "manuPartNum:LM358N",
-          "storeInfo.id":                    store,
-          "storeInfo.type":                  "global",
-          "storeInfo.locale":                "it_IT",
-          "resultsSettings.offset":          "0",
-          "resultsSettings.numberOfResults": "2",
-          "resultsSettings.sortBy":          "unitPrice",
-          "resultsSettings.sortOrder":       "asc",
-          "callInfo.responseDataFormat":     "json",
-          "userinfo.apiKey":                 farnellKey,
-        });
-
-        const url = `https://api.element14.com/catalog/products?${params.toString()}`;
-        const res = await fetch(url, { headers: { "Accept": "application/json" } });
-        const text = await res.text();
-        farnellResults[store] = {
-          status:      res.status,
-          contentType: res.headers.get("content-type"),
-          body:        text.slice(0, 300),
-        };
-      } catch (e: unknown) {
-        farnellResults[store] = { error: e instanceof Error ? e.message : String(e) };
-      }
-    }
-  }
-
-  // ── DigiKey ───────────────────────────────────────────────────────────────
+  // ── DigiKey — risposta completa del primo prodotto ────────────────────────
   let digikeyResult: unknown = "not tested";
   if (digikeyId && digikeySecret &&
       digikeyId !== "placeholder" && digikeySecret !== "placeholder") {
     try {
+      // Token
       const tokenRes = await fetch("https://api.digikey.com/v1/oauth2/token", {
         method:  "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -91,6 +62,7 @@ export async function GET() {
       const tokenJson = await tokenRes.json();
       const token     = tokenJson.access_token;
 
+      // Search
       const searchRes = await fetch(
         "https://api.digikey.com/products/v4/search/keyword",
         {
@@ -113,11 +85,35 @@ export async function GET() {
           }),
         }
       );
-      const text = await searchRes.text();
+      const json = await searchRes.json();
+
+      // Mostra struttura completa del primo prodotto
+      const firstProduct = json?.Products?.[0];
       digikeyResult = {
-        status:      searchRes.status,
-        contentType: searchRes.headers.get("content-type"),
-        body:        text.slice(0, 400),
+        status:         searchRes.status,
+        totalResults:   json?.TotalResultCount,
+        productsCount:  json?.Products?.length,
+        firstProduct:   firstProduct ? {
+          mpn:              firstProduct.ManufacturerProductNumber,
+          description:      firstProduct.Description,
+          quantityAvailable: firstProduct.QuantityAvailable,
+          minimumOrderQty:  firstProduct.MinimumOrderQuantity,
+          standardPackage:  firstProduct.StandardPackage,
+          unitPrice:        firstProduct.UnitPrice,
+          currency:         firstProduct.Currency,
+          productUrl:       firstProduct.ProductUrl,
+          // Mostra la struttura dei price breaks
+          standardPricing:  firstProduct.StandardPricing?.slice(0, 4),
+          // Mostra anche ProductVariations per capire la struttura
+          variationsCount:  firstProduct.ProductVariations?.length,
+          firstVariation:   firstProduct.ProductVariations?.[0] ? {
+            digiKeyPartNumber: firstProduct.ProductVariations[0].DigiKeyProductNumber,
+            packageType:       firstProduct.ProductVariations[0].PackageType,
+            standardPricing:   firstProduct.ProductVariations[0].StandardPricing?.slice(0, 3),
+          } : null,
+        } : "no products",
+        // Mostra eventuali errori
+        errors: json?.Errors ?? null,
       };
     } catch (e: unknown) {
       digikeyResult = { error: e instanceof Error ? e.message : String(e) };
@@ -126,7 +122,6 @@ export async function GET() {
 
   return NextResponse.json({
     mouser:  mouserResult,
-    farnell: farnellResults,
     digikey: digikeyResult,
   });
 }
