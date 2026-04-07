@@ -1,20 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Farnell / element14 Adapter (fix)
+//  icpaste.com — Farnell / element14 Adapter
 //
-//  Il problema era che i parametri venivano passati in modo errato.
-//  L'API Farnell vuole i parametri come query string semplici, non JSON.
-//
-//  URL corretto:
-//  https://api.element14.com/catalog/products
-//    ?term=manuPartNum:LM358N
-//    &storeInfo.id=it.farnell.com
-//    &resultsSettings.offset=0
-//    &resultsSettings.numberOfResults=10
-//    &resultsSettings.refinements.filters=rohsCompliant
-//    &resultsSettings.sortBy=unitPrice
-//    &resultsSettings.sortOrder=asc
-//    &callInfo.responseDataFormat=json
-//    &callInfo.apiKey=YOUR_KEY
+//  FIX: il parametro corretto è "userinfo.apiKey" non "callInfo.apiKey"
+//  URL corretto: https://api.element14.com/catalog/products/
+//                                                          ^ slash finale!
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { DistributorAdapter } from "./adapter.interface";
@@ -68,22 +57,21 @@ export const FarnellAdapter: DistributorAdapter = {
     if (!apiKey || apiKey === "placeholder") return [];
 
     try {
-      // ── Fix: parametri come query string semplici, non JSON ──────────────
+      // ── Fix: "userinfo.apiKey" è il parametro corretto ───────────────────
       const params = new URLSearchParams({
-        "term":                              `manuPartNum:${mpn}`,
-        "storeInfo.id":                      STORE,
-        "storeInfo.type":                    "global",
-        "storeInfo.locale":                  "it_IT",
-        "resultsSettings.offset":            "0",
-        "resultsSettings.numberOfResults":   "10",
-        "resultsSettings.sortBy":            "unitPrice",
-        "resultsSettings.sortOrder":         "asc",
-        "callInfo.responseDataFormat":       "json",
-        "callInfo.apiKey":                   apiKey,
+        "term":                            `manuPartNum:${mpn}`,
+        "storeInfo.id":                    STORE,
+        "storeInfo.type":                  "global",
+        "storeInfo.locale":                "it_IT",
+        "resultsSettings.offset":          "0",
+        "resultsSettings.numberOfResults": "10",
+        "resultsSettings.sortBy":          "unitPrice",
+        "resultsSettings.sortOrder":       "asc",
+        "callInfo.responseDataFormat":     "json",
+        "userinfo.apiKey":                 apiKey,   // ← FIX: era callInfo.apiKey
       });
 
-      const url      = `${BASE_URL}?${params.toString()}`;
-      const response = await fetch(url, {
+      const response = await fetch(`${BASE_URL}?${params.toString()}`, {
         method:  "GET",
         headers: { "Accept": "application/json" },
       });
