@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  icpaste.com — Digi-Key Adapter
 //
-//  FIX: StandardPricing è dentro ProductVariations[0], non sul prodotto root
+//  FIX: StandardPricing è undefined sul root — i prezzi sono dentro
+//       ProductVariations[0].standardPricing (lowercase 's' nella risposta!)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { DistributorAdapter } from "./adapter.interface";
@@ -43,6 +44,7 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
 }
 
 // ── DigiKey API types ─────────────────────────────────────────────────────────
+// NOTA: la risposta API usa PascalCase per alcuni campi e camelCase per altri!
 interface DigiKeyPriceBreak {
   BreakQuantity: number;
   UnitPrice:     number;
@@ -52,8 +54,10 @@ interface DigiKeyPriceBreak {
 interface DigiKeyVariation {
   DigiKeyProductNumber: string;
   PackageType:          { Id: number; Name: string };
-  StandardPricing:      DigiKeyPriceBreak[];
-  QuantityAvailable?:   number;
+  QuantityAvailable:    number;
+  // ← la risposta usa "standardPricing" lowercase!
+  standardPricing:      DigiKeyPriceBreak[];
+  StandardPricing:      DigiKeyPriceBreak[];   // per sicurezza gestiamo entrambi
 }
 
 interface DigiKeyProduct {
@@ -63,8 +67,10 @@ interface DigiKeyProduct {
   MinimumOrderQuantity:      number;
   StandardPackage:           number;
   UnitPrice:                 number;
-  StandardPricing:           DigiKeyPriceBreak[];   // spesso vuoto nel root
-  ProductVariations:         DigiKeyVariation[];    // ← qui ci sono i prezzi reali
+  // Root pricing — spesso undefined in v4
+  StandardPricing:           DigiKeyPriceBreak[] | undefined;
+  standardPricing:           DigiKeyPriceBreak[] | undefined;
+  ProductVariations:         DigiKeyVariation[];
   ProductUrl:                string;
   Currency:                  string;
 }
@@ -80,33 +86,42 @@ function buildDigikeyUrl(product: DigiKeyProduct): string {
   return AFFILIATE_PARAM ? `${base}${AFFILIATE_PARAM}` : base;
 }
 
-// ── Estrai i price tiers — prima da root, poi da Variations ──────────────────
+// ── Estrai price tiers — gestisce PascalCase e camelCase ─────────────────────
 function extractPriceTiers(product: DigiKeyProduct): PriceTier[] {
-  // 1. Prova prima StandardPricing sul prodotto root
-  if (product.StandardPricing && product.StandardPricing.length > 0) {
-    const tiers = product.StandardPricing
+
+  // Helper per convertire array di price breaks in PriceTier[]
+  const convert = (breaks: DigiKeyPriceBreak[]): PriceTier[] =>
+    breaks
       .map(pb => ({ qty: pb.BreakQuantity, price: pb.UnitPrice }))
-      .filter(t => t.price > 0)
+      .filter(t => t.qty > 0 && t.price > 0)
       .sort((a, b) => a.qty - b.qty);
+
+  // 1. Prova root StandardPricing (PascalCase)
+  if (product.StandardPricing?.length) {
+    const tiers = convert(product.StandardPricing);
     if (tiers.length > 0) return tiers;
   }
 
-  // 2. Fallback: prendi i prezzi dalla prima variazione disponibile
-  //    (DigiKey v4 mette i prezzi dentro ProductVariations[0].StandardPricing)
-  if (product.ProductVariations && product.ProductVariations.length > 0) {
+  // 2. Prova root standardPricing (camelCase)
+  if (product.standardPricing?.length) {
+    const tiers = convert(product.standardPricing);
+    if (tiers.length > 0) return tiers;
+  }
+
+  // 3. Cerca nelle variazioni — prova sia PascalCase che camelCase
+  if (product.ProductVariations?.length) {
     for (const variation of product.ProductVariations) {
-      if (variation.StandardPricing && variation.StandardPricing.length > 0) {
-        const tiers = variation.StandardPricing
-          .map(pb => ({ qty: pb.BreakQuantity, price: pb.UnitPrice }))
-          .filter(t => t.price > 0)
-          .sort((a, b) => a.qty - b.qty);
+      // Prova PascalCase
+      const pricing = variation.StandardPricing ?? variation.standardPricing;
+      if (pricing?.length) {
+        const tiers = convert(pricing);
         if (tiers.length > 0) return tiers;
       }
     }
   }
 
-  // 3. Ultimo fallback: usa UnitPrice del root come tier unico
-  if (product.UnitPrice && product.UnitPrice > 0) {
+  // 4. Ultimo fallback: UnitPrice del root come tier singolo
+  if (product.UnitPrice > 0) {
     return [{ qty: 1, price: product.UnitPrice }];
   }
 
@@ -166,15 +181,14 @@ export const DigikeyAdapter: DistributorAdapter = {
           const priceTiers = extractPriceTiers(p);
           if (priceTiers.length === 0) return null;
 
-          // packageUnit: StandardPackage > 1, altrimenti MinimumOrderQuantity
           const packageUnit = (p.StandardPackage ?? 0) > 1
             ? p.StandardPackage
             : (p.MinimumOrderQuantity || 1);
 
-          // Stock: usa QuantityAvailable del root o della prima variazione
-          const stock = p.QuantityAvailable
-            ?? p.ProductVariations?.[0]?.QuantityAvailable
-            ?? 0;
+          const stock =
+            p.QuantityAvailable ??
+            p.ProductVariations?.[0]?.QuantityAvailable ??
+            0;
 
           return {
             mpn:         p.ManufacturerProductNumber,
