@@ -1,75 +1,48 @@
 import { NextResponse } from "next/server";
+import { DigikeyAdapter } from "@/lib/adapters/digikey.adapter";
+import { distributors }   from "@/lib/adapters";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const digikeyId     = process.env.DIGIKEY_CLIENT_ID;
-  const digikeySecret = process.env.DIGIKEY_CLIENT_SECRET;
-
-  if (!digikeyId || !digikeySecret) {
-    return NextResponse.json({ error: "DigiKey credentials missing" });
-  }
-
   try {
-    // ── Token ─────────────────────────────────────────────────────────────────
-    const tokenRes = await fetch("https://api.digikey.com/v1/oauth2/token", {
-      method:  "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id:     digikeyId,
-        client_secret: digikeySecret,
-        grant_type:    "client_credentials",
-      }),
-    });
-    const tokenJson = await tokenRes.json();
-    const token     = tokenJson.access_token;
+    // ── 1. Test adapter DigiKey direttamente ──────────────────────────────
+    const digikeyResults = await DigikeyAdapter.search("LM358N", 100);
 
-    // ── Search ────────────────────────────────────────────────────────────────
-    const searchRes = await fetch(
-      "https://api.digikey.com/products/v4/search/keyword",
-      {
-        method:  "POST",
-        headers: {
-          "Content-Type":              "application/json",
-          "Accept":                    "application/json",
-          "Authorization":             `Bearer ${token}`,
-          "X-DIGIKEY-Client-Id":       digikeyId,
-          "X-DIGIKEY-Locale-Site":     "IT",
-          "X-DIGIKEY-Locale-Language": "it",
-          "X-DIGIKEY-Locale-Currency": "EUR",
-        },
-        body: JSON.stringify({
-          Keywords:          "LM358N",
-          RecordCount:       3,
-          RecordStartPos:    0,
-          RequestedQuantity: 100,
-          SearchOptions:     ["ManufacturerPartSearch"],
-        }),
-      }
+    // ── 2. Lista distributori attivi ──────────────────────────────────────
+    const activeDistributors = distributors.map(d => d.name);
+
+    // ── 3. Test tutti i distributori attivi ───────────────────────────────
+    const allResults = await Promise.all(
+      distributors.map(async d => {
+        const results = await d.search("LM358N", 100);
+        return {
+          distributor: d.name,
+          count:       results.length,
+          firstResult: results[0] ? {
+            mpn:         results[0].mpn,
+            stock:       results[0].stock,
+            packageUnit: results[0].packageUnit,
+            priceTiers:  results[0].priceTiers.slice(0, 3),
+            currency:    results[0].currency,
+          } : null,
+        };
+      })
     );
 
-    const json = await searchRes.json();
-    const p    = json?.Products?.[0];
-    const v    = p?.ProductVariations?.[0];
-
-    // ── Mostra TUTTE le chiavi del prodotto e della variazione ────────────────
     return NextResponse.json({
-      productKeys:   p ? Object.keys(p) : [],
-      variationKeys: v ? Object.keys(v) : [],
-      // Mostra il valore esatto di ogni campo pricing
-      pricing: {
-        "p.StandardPricing":          p?.StandardPricing,
-        "p.standardPricing":          p?.standardPricing,
-        "v.StandardPricing":          v?.StandardPricing,
-        "v.standardPricing":          v?.standardPricing,
-        "v.MyPricing":                v?.MyPricing,
-        "p.UnitPrice":                p?.UnitPrice,
-        // Dump completo della variazione per vedere tutti i campi
-        fullVariation:                v,
+      activeDistributors,
+      digikeyDirectTest: {
+        count:       digikeyResults.length,
+        firstResult: digikeyResults[0] ?? null,
       },
+      allDistributors: allResults,
     });
 
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) });
+    return NextResponse.json({
+      error: e instanceof Error ? e.message : String(e),
+      stack: e instanceof Error ? e.stack?.slice(0, 500) : null,
+    });
   }
 }
