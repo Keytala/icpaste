@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */ // v2
 import { DistributorAdapter } from "./adapter.interface";
 import { PartResult, PriceTier } from "../types";
 
