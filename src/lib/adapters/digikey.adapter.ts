@@ -3,13 +3,13 @@ import { DistributorAdapter } from "./adapter.interface";
 import { PartResult, PriceTier } from "../types";
 
 const BASE_URL        = "https://api.digikey.com";
-const AFFILIATE_PARAM = process.env.DIGIKEY_AFFILIATE_PARAM  ?? "";
-const LOCALE_SITE     = process.env.DIGIKEY_LOCALE_SITE      ?? "IT";
-const LOCALE_LANGUAGE = process.env.DIGIKEY_LOCALE_LANGUAGE  ?? "it";
-const LOCALE_CURRENCY = process.env.DIGIKEY_LOCALE_CURRENCY  ?? "EUR";
+const AFFILIATE_PARAM = process.env.DIGIKEY_AFFILIATE_PARAM ?? "";
+const LOCALE_SITE     = process.env.DIGIKEY_LOCALE_SITE     ?? "IT";
+const LOCALE_LANGUAGE = process.env.DIGIKEY_LOCALE_LANGUAGE ?? "it";
+const LOCALE_CURRENCY = process.env.DIGIKEY_LOCALE_CURRENCY ?? "EUR";
 
 let cachedToken: string | null = null;
-let tokenExpiry: number        = 0;
+let tokenExpiry: number = 0;
 
 async function getToken(id: string, secret: string): Promise<string> {
   if (cachedToken && Date.now() < tokenExpiry - 60000) return cachedToken;
@@ -17,7 +17,9 @@ async function getToken(id: string, secret: string): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: id, client_secret: secret, grant_type: "client_credentials",
+      client_id: id,
+      client_secret: secret,
+      grant_type: "client_credentials",
     }),
   });
   const j = await r.json();
@@ -30,9 +32,11 @@ export const DigikeyAdapter: DistributorAdapter = {
   name: "Digi-Key",
 
   async search(mpn: string, qty: number): Promise<PartResult[]> {
-    const id     = process.env.DIGIKEY_CLIENT_ID;
+    const id = process.env.DIGIKEY_CLIENT_ID;
     const secret = process.env.DIGIKEY_CLIENT_SECRET;
-    if (!id || !secret || id === "placeholder" || secret === "placeholder") return [];
+    if (!id || !secret || id === "placeholder" || secret === "placeholder") {
+      return [];
+    }
 
     try {
       const token = await getToken(id, secret);
@@ -59,51 +63,57 @@ export const DigikeyAdapter: DistributorAdapter = {
       });
 
       if (!res.ok) {
-        if (res.status === 401) { cachedToken = null; tokenExpiry = 0; }
-        console.error(`[DigiKey] HTTP ${res.status}`);
+        if (res.status === 401) {
+          cachedToken = null;
+          tokenExpiry = 0;
+        }
         return [];
       }
 
       const json: any = await res.json();
-      const results: PartResult[] = [];
+      const output: PartResult[] = [];
 
-      for (const p of (json?.Products ?? [])) {
-        for (const v of (p?.ProductVariations ?? [])) {
-
+      for (const p of json?.Products ?? []) {
+        for (const v of p?.ProductVariations ?? []) {
           const pricing: any[] = v?.StandardPricing ?? [];
           if (!pricing.length) continue;
 
           const priceTiers: PriceTier[] = pricing
-            .map((pb: any) => ({ qty: Number(pb.BreakQuantity), price: Number(pb.UnitPrice) }))
+            .map((pb: any) => ({
+              qty:   Number(pb.BreakQuantity),
+              price: Number(pb.UnitPrice),
+            }))
             .filter((t: PriceTier) => t.qty > 0 && t.price > 0)
             .sort((a: PriceTier, b: PriceTier) => a.qty - b.qty);
 
           if (!priceTiers.length) continue;
 
-          const stock       = Number(v?.QuantityAvailableforPackageType ?? p?.QuantityAvailable ?? 0);
-          const stdPackage  = Number(v?.StandardPackage ?? 0);
-          const moq         = Number(v?.MinimumOrderQuantity ?? 1);
-          const packageUnit = stdPackage > 1 ? stdPackage : (moq || 1);
-          const base        = p?.ProductUrl ?? `https://www.digikey.it/products/it?keywords=${encodeURIComponent(mpn)}`;
+          const stock      = Number(v?.QuantityAvailableforPackageType ?? p?.QuantityAvailable ?? 0);
+          const stdPkg     = Number(v?.StandardPackage ?? 0);
+          const moq        = Number(v?.MinimumOrderQuantity ?? 1);
+          const pkgUnit    = stdPkg > 1 ? stdPkg : moq || 1;
+          const base       = String(p?.ProductUrl ?? `https://www.digikey.it/products/it?keywords=${encodeURIComponent(mpn)}`);
+          const productUrl = AFFILIATE_PARAM ? `${base}${AFFILIATE_PARAM}` : base;
 
-          results.push({
+          const result: PartResult = {
             mpn:         String(p?.ManufacturerProductNumber ?? mpn),
             description: String(p?.Description?.ProductDescription ?? ""),
             stock,
-            packageUnit,
+            packageUnit: pkgUnit,
             priceTiers,
-            productUrl:  AFFILIATE_PARAM ? `${base}${AFFILIATE_PARAM}` : base,
+            productUrl,
             currency:    String(p?.Currency ?? LOCALE_CURRENCY),
             distributor: "Digi-Key",
-          });
+          };
+
+          output.push(result);
         }
       }
 
-      console.log(`[DigiKey] ${mpn} → ${results.length} results`);
-      return results;
+      return output;
 
     } catch (err) {
-      console.error(`[DigiKey] Error:`, err);
+      console.error(`[DigiKey] Error searching ${mpn}:`, err);
       return [];
     }
   },
