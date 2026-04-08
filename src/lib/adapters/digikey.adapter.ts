@@ -1,15 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Digi-Key Adapter (fix definitivo)
-//
-//  Struttura reale API v4:
-//  - Product.QuantityAvailable        → stock totale root (ok)
-//  - Product.ProductVariations[n]
-//      .StandardPricing               → price breaks (PascalCase ✅)
-//      .QuantityAvailableforPackageType → stock per variazione
-//      .MinimumOrderQuantity          → MOQ
-//      .StandardPackage               → package unit (es. 40 per tubo)
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { DistributorAdapter } from "./adapter.interface";
 import { PartResult, PriceTier } from "../types";
 
@@ -20,7 +8,6 @@ const LOCALE_SITE     = process.env.DIGIKEY_LOCALE_SITE      ?? "IT";
 const LOCALE_LANGUAGE = process.env.DIGIKEY_LOCALE_LANGUAGE  ?? "it";
 const LOCALE_CURRENCY = process.env.DIGIKEY_LOCALE_CURRENCY  ?? "EUR";
 
-// ── Token cache ───────────────────────────────────────────────────────────────
 let cachedToken: string | null = null;
 let tokenExpiry: number        = 0;
 
@@ -37,10 +24,7 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
     }),
   });
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`[DigiKey] Token error ${response.status}: ${err}`);
-  }
+  if (!response.ok) throw new Error(`[DigiKey] Token error ${response.status}`);
 
   const json  = await response.json();
   cachedToken = json.access_token;
@@ -48,46 +32,6 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
   return cachedToken!;
 }
 
-// ── DigiKey API types (struttura reale v4) ────────────────────────────────────
-interface DigiKeyPriceBreak {
-  BreakQuantity: number;
-  UnitPrice:     number;
-  TotalPrice:    number;
-}
-
-interface DigiKeyVariation {
-  DigiKeyProductNumber:           string;
-  PackageType:                    { Id: number; Name: string };
-  StandardPricing:                DigiKeyPriceBreak[];
-  MyPricing:                      DigiKeyPriceBreak[];
-  QuantityAvailableforPackageType: number;   // ← stock per variazione
-  MinimumOrderQuantity:           number;
-  StandardPackage:                number;    // ← package unit
-  DigiReelFee:                    number;
-}
-
-interface DigiKeyProduct {
-  ManufacturerProductNumber: string;
-  Description:               { ProductDescription: string };
-  QuantityAvailable:         number;
-  UnitPrice:                 number;
-  ProductVariations:         DigiKeyVariation[];
-  ProductUrl:                string;
-  Currency:                  string;
-}
-
-interface DigiKeySearchResponse {
-  Products:         DigiKeyProduct[];
-  TotalResultCount: number;
-}
-
-function buildDigikeyUrl(product: DigiKeyProduct): string {
-  const base = product.ProductUrl
-    ?? `https://www.digikey.it/products/it?keywords=${encodeURIComponent(product.ManufacturerProductNumber)}`;
-  return AFFILIATE_PARAM ? `${base}${AFFILIATE_PARAM}` : base;
-}
-
-// ── Adapter ───────────────────────────────────────────────────────────────────
 export const DigikeyAdapter: DistributorAdapter = {
   name: "Digi-Key",
 
@@ -96,97 +40,82 @@ export const DigikeyAdapter: DistributorAdapter = {
     const clientSecret = process.env.DIGIKEY_CLIENT_SECRET;
 
     if (!clientId || !clientSecret ||
-        clientId === "placeholder" || clientSecret === "placeholder") return [];
+        clientId     === "placeholder" ||
+        clientSecret === "placeholder") return [];
 
     try {
       const token = await getAccessToken(clientId, clientSecret);
 
-      const response = await fetch(
-        `${BASE_URL}/products/v4/search/keyword`,
-        {
-          method:  "POST",
-          headers: {
-            "Content-Type":              "application/json",
-            "Accept":                    "application/json",
-            "Authorization":             `Bearer ${token}`,
-            "X-DIGIKEY-Client-Id":       clientId,
-            "X-DIGIKEY-Locale-Site":     LOCALE_SITE,
-            "X-DIGIKEY-Locale-Language": LOCALE_LANGUAGE,
-            "X-DIGIKEY-Locale-Currency": LOCALE_CURRENCY,
-          },
-          body: JSON.stringify({
-            Keywords:          mpn,
-            RecordCount:       10,
-            RecordStartPos:    0,
-            RequestedQuantity: qty,
-            SearchOptions:     ["ManufacturerPartSearch"],
-            SortOptions:       [{ Field: "UnitPrice", SortOrder: "Ascending" }],
-          }),
-        }
-      );
+      const response = await fetch(`${BASE_URL}/products/v4/search/keyword`, {
+        method:  "POST",
+        headers: {
+          "Content-Type":              "application/json",
+          "Accept":                    "application/json",
+          "Authorization":             `Bearer ${token}`,
+          "X-DIGIKEY-Client-Id":       clientId,
+          "X-DIGIKEY-Locale-Site":     LOCALE_SITE,
+          "X-DIGIKEY-Locale-Language": LOCALE_LANGUAGE,
+          "X-DIGIKEY-Locale-Currency": LOCALE_CURRENCY,
+        },
+        body: JSON.stringify({
+          Keywords:          mpn,
+          RecordCount:       10,
+          RecordStartPos:    0,
+          RequestedQuantity: qty,
+          SearchOptions:     ["ManufacturerPartSearch"],
+          SortOptions:       [{ Field: "UnitPrice", SortOrder: "Ascending" }],
+        }),
+      });
 
       if (!response.ok) {
-        const errText = await response.text();
-        console.error(`[DigiKey] HTTP ${response.status}:`, errText.slice(0, 200));
         if (response.status === 401) { cachedToken = null; tokenExpiry = 0; }
         return [];
       }
 
-      const json     = await response.json() as DigiKeySearchResponse;
-      const products = json.Products ?? [];
-
-      // ── Per ogni prodotto, espandi le variazioni come risultati separati ───
-      // Ogni variazione è un package type diverso (Tubo, Reel, Tray, ecc.)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const json: any = await response.json();
+      const products  = json?.Products ?? [];
       const results: PartResult[] = [];
 
       for (const p of products) {
-        const variations = p.ProductVariations ?? [];
+        const variations = p?.ProductVariations ?? [];
 
         for (const v of variations) {
-          // Salta se non ha prezzi
-          if (!v.StandardPricing || v.StandardPricing.length === 0) continue;
+          // ── Leggi StandardPricing dalla variazione ────────────────────────
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const pricing: any[] = v?.StandardPricing ?? [];
+          if (!pricing || pricing.length === 0) continue;
 
-          const priceTiers: PriceTier[] = v.StandardPricing
-            .map(pb => ({ qty: pb.BreakQuantity, price: pb.UnitPrice }))
+          const priceTiers: PriceTier[] = pricing
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .map((pb: any) => ({
+              qty:   Number(pb.BreakQuantity),
+              price: Number(pb.UnitPrice),
+            }))
             .filter(t => t.qty > 0 && t.price > 0)
             .sort((a, b) => a.qty - b.qty);
 
           if (priceTiers.length === 0) continue;
 
-          // Stock: usa QuantityAvailableforPackageType della variazione
-          const stock = v.QuantityAvailableforPackageType ?? p.QuantityAvailable ?? 0;
+          const stock       = Number(v?.QuantityAvailableforPackageType ?? p?.QuantityAvailable ?? 0);
+          const stdPackage  = Number(v?.StandardPackage ?? 0);
+          const moq         = Number(v?.MinimumOrderQuantity ?? 1);
+          const packageUnit = stdPackage > 1 ? stdPackage : (moq || 1);
 
-          // Package unit: StandardPackage della variazione
-          const packageUnit = (v.StandardPackage ?? 0) > 1
-            ? v.StandardPackage
-            : (v.MinimumOrderQuantity || 1);
+          const base = p?.ProductUrl
+            ?? `https://www.digikey.it/products/it?keywords=${encodeURIComponent(p?.ManufacturerProductNumber ?? mpn)}`;
+          const productUrl = AFFILIATE_PARAM ? `${base}${AFFILIATE_PARAM}` : base;
 
           results.push({
-            mpn:         p.ManufacturerProductNumber,
-            description: p.Description?.ProductDescription ?? "",
+            mpn:         String(p?.ManufacturerProductNumber ?? mpn),
+            description: String(p?.Description?.ProductDescription ?? ""),
             stock,
             packageUnit,
             priceTiers,
-            productUrl:  buildDigikeyUrl(p),
-            currency:    p.Currency ?? LOCALE_CURRENCY,
+            productUrl,
+            currency:    String(p?.Currency ?? LOCALE_CURRENCY),
             distributor: "Digi-Key",
           });
-        }
-
-        // Fallback: se nessuna variazione ha prezzi, usa UnitPrice root
-        if (results.filter(r => r.mpn === p.ManufacturerProductNumber).length === 0) {
-          if (p.UnitPrice > 0) {
-            results.push({
-              mpn:         p.ManufacturerProductNumber,
-              description: p.Description?.ProductDescription ?? "",
-              stock:       p.QuantityAvailable ?? 0,
-              packageUnit: 1,
-              priceTiers:  [{ qty: 1, price: p.UnitPrice }],
-              productUrl:  buildDigikeyUrl(p),
-              currency:    p.Currency ?? LOCALE_CURRENCY,
-              distributor: "Digi-Key",
-            });
-          }
         }
       }
 
