@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// icpaste.com — Digi-Key Adapter v4
 import { DistributorAdapter } from "./adapter.interface";
 import { PartResult, PriceTier } from "../types";
 
@@ -19,8 +18,9 @@ async function getToken(id: string, secret: string): Promise<string> {
       grant_type:    "client_credentials",
     }),
   });
-  if (!r.ok) throw new Error(`Token error: ${r.status}`);
+  if (!r.ok) throw new Error(`[DigiKey] Token HTTP ${r.status}`);
   const j = await r.json();
+  if (!j.access_token) throw new Error("[DigiKey] No access_token in response");
   return String(j.access_token);
 }
 
@@ -39,7 +39,7 @@ export const DigikeyAdapter: DistributorAdapter = {
     try {
       token = await getToken(id, secret);
     } catch (e) {
-      console.error("[DigiKey] Token failed:", e);
+      console.error("[DigiKey] Token error:", e);
       return [];
     }
 
@@ -66,7 +66,7 @@ export const DigikeyAdapter: DistributorAdapter = {
         }),
       });
     } catch (e) {
-      console.error("[DigiKey] Fetch failed:", e);
+      console.error("[DigiKey] Fetch error:", e);
       return [];
     }
 
@@ -79,51 +79,42 @@ export const DigikeyAdapter: DistributorAdapter = {
     try {
       json = await res.json();
     } catch (e) {
-      console.error("[DigiKey] JSON parse failed:", e);
+      console.error("[DigiKey] JSON parse error:", e);
       return [];
     }
 
     const output: PartResult[] = [];
+    const products: any[] = Array.isArray(json?.Products) ? json.Products : [];
 
-    const products: any[] = json?.Products ?? [];
+    for (const p of products) {
+      if (!p || typeof p !== "object") continue;
+      const variations: any[] = Array.isArray(p.ProductVariations) ? p.ProductVariations : [];
 
-    for (let pi = 0; pi < products.length; pi++) {
-      const p = products[pi];
-      if (!p) continue;
-
-      const variations: any[] = p.ProductVariations ?? [];
-
-      for (let vi = 0; vi < variations.length; vi++) {
-        const v = variations[vi];
-        if (!v) continue;
-
-        const pricing: any[] = v.StandardPricing ?? [];
+      for (const v of variations) {
+        if (!v || typeof v !== "object") continue;
+        const pricing: any[] = Array.isArray(v.StandardPricing) ? v.StandardPricing : [];
         if (pricing.length === 0) continue;
 
         const priceTiers: PriceTier[] = [];
-        for (let ti = 0; ti < pricing.length; ti++) {
-          const pb = pricing[ti];
-          const q  = Number(pb.BreakQuantity);
-          const pr = Number(pb.UnitPrice);
-          if (q > 0 && pr > 0) {
-            priceTiers.push({ qty: q, price: pr });
-          }
+        for (const pb of pricing) {
+          const q  = Number(pb?.BreakQuantity ?? 0);
+          const pr = Number(pb?.UnitPrice     ?? 0);
+          if (q > 0 && pr > 0) priceTiers.push({ qty: q, price: pr });
         }
         priceTiers.sort((a, b) => a.qty - b.qty);
-
         if (priceTiers.length === 0) continue;
 
-        const stock      = Number(v.QuantityAvailableforPackageType ?? 0);
-        const stdPkg     = Number(v.StandardPackage ?? 0);
-        const moq        = Number(v.MinimumOrderQuantity ?? 1);
-        const pkgUnit    = stdPkg > 1 ? stdPkg : (moq > 0 ? moq : 1);
+        const stock   = Number(v.QuantityAvailableforPackageType ?? p.QuantityAvailable ?? 0);
+        const stdPkg  = Number(v.StandardPackage ?? 0);
+        const moq     = Number(v.MinimumOrderQuantity ?? 1);
+        const pkgUnit = stdPkg > 1 ? stdPkg : (moq > 0 ? moq : 1);
 
-        const rawUrl     = String(p.ProductUrl ?? "");
+        const rawUrl     = typeof p.ProductUrl === "string" ? p.ProductUrl : "";
         const productUrl = rawUrl
           ? (AFFILIATE_PARAM ? `${rawUrl}${AFFILIATE_PARAM}` : rawUrl)
-          : `https://www.digikey.it/products/it?keywords=${encodeURIComponent(String(p.ManufacturerProductNumber ?? mpn))}`;
+          : `https://www.digikey.it/products/it?keywords=${encodeURIComponent(mpn)}`;
 
-        const item: PartResult = {
+        output.push({
           mpn:         String(p.ManufacturerProductNumber ?? mpn),
           description: String(p.Description?.ProductDescription ?? ""),
           stock,
@@ -132,9 +123,7 @@ export const DigikeyAdapter: DistributorAdapter = {
           productUrl,
           currency:    String(p.Currency ?? LOCALE_CURRENCY),
           distributor: "Digi-Key",
-        };
-
-        output.push(item);
+        });
       }
     }
 
