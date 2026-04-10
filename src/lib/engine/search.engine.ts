@@ -1,7 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Search Engine v6 (TypeScript fix)
-// ─────────────────────────────────────────────────────────────────────────────
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { distributors }           from "../adapters";
 import { smartOptimizeQty }       from "./qty.optimizer";
 import { BomRow }                 from "../utils/bom-parser";
@@ -15,14 +12,10 @@ import {
 } from "../types";
 
 export async function searchBom(bom: BomRow[]): Promise<SearchResponse> {
-  const results: OptimizedResult[] = await Promise.all(
-    bom.map(row => searchSingleRow(row))
-  );
-
+  const results = await Promise.all(bom.map(row => searchSingleRow(row)));
   const totalBom = parseFloat(
     results.reduce((sum, r) => sum + (r.totalPrice ?? 0), 0).toFixed(2)
   );
-
   return {
     results,
     totalBom,
@@ -31,7 +24,6 @@ export async function searchBom(bom: BomRow[]): Promise<SearchResponse> {
   };
 }
 
-// ── Tipo interno ──────────────────────────────────────────────────────────────
 interface ScoredResult {
   part:            PartResult;
   optimalQty:      number;
@@ -47,41 +39,54 @@ interface ScoredResult {
 async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
   const { rawCode, qty, detection } = row;
 
-  // ── Resolve distributor code → MPN ───────────────────────────────────────
   let mpn         = rawCode;
   let description = "";
   let resolvedNote: string | undefined;
 
   if (detection.isDistributorCode) {
-    const resolved = await resolveDistributorCode(rawCode, detection.detectedAs);
-    mpn         = resolved.mpn;
-    description = resolved.description;
-    if (resolved.wasResolved) {
-      resolvedNote = `Resolved from ${detection.detectedAs} code "${rawCode}"`;
+    try {
+      const resolved = await resolveDistributorCode(rawCode, detection.detectedAs);
+      mpn         = resolved.mpn;
+      description = resolved.description;
+      if (resolved.wasResolved) {
+        resolvedNote = `Resolved from ${detection.detectedAs} code "${rawCode}"`;
+      }
+    } catch {
+      // fallback: usa rawCode come MPN
     }
   }
 
-  // ── Query all distributors in parallel ────────────────────────────────────
-  const allResults = (
-    await Promise.all(distributors.map(d => d.search(mpn, qty)))
-  ).flat();
+  // Query tutti i distributori in parallelo
+  let allResults: PartResult[] = [];
+  try {
+    const responses = await Promise.all(
+      distributors.map(d => d.search(mpn, qty).catch(() => [] as PartResult[]))
+    );
+    allResults = responses.flat();
+  } catch {
+    allResults = [];
+  }
+
+  console.log(`[Engine] ${mpn} qty=${qty} → ${allResults.length} raw results from ${distributors.length} distributors`);
+  allResults.forEach(r => console.log(`  → ${r.distributor}: ${r.mpn} stock=${r.stock} pkg=${r.packageUnit} tiers=${r.priceTiers.length}`));
 
   if (allResults.length === 0) {
     return noResult(mpn, rawCode, qty, description, resolvedNote,
       "No results found across all distributors");
   }
 
-  // ── Per ogni risultato applica smartOptimizeQty ───────────────────────────
-  const scored: ScoredResult[] = allResults
-    .map((part: PartResult): ScoredResult | null => {
-      const opt = smartOptimizeQty(
-        qty,
-        part.packageUnit,
-        part.stock,
-        part.priceTiers
-      );
-      if (opt.unitPrice === 0) return null;
-      return {
+  // Calcola scored results
+  const scored: ScoredResult[] = [];
+
+  for (const part of allResults) {
+    try {
+      const opt = smartOptimizeQty(qty, part.packageUnit, part.stock, part.priceTiers);
+      console.log(`  [Optimize] ${part.distributor} ${part.mpn}: unitPrice=${opt.unitPrice} feasible=${opt.feasible}`);
+      if (opt.unitPrice === 0) {
+        console.log(`  [SKIP] ${part.distributor} ${part.mpn}: unitPrice=0`);
+        continue;
+      }
+      scored.push({
         part,
         optimalQty:      opt.optimalQty,
         unitPrice:       opt.unitPrice,
@@ -91,48 +96,46 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
         packageRounded:  opt.packageRounded,
         priceStepUsed:   opt.priceStepUsed,
         savedVsOriginal: opt.savedVsOriginal,
-      };
-    })
-    .filter((c): c is ScoredResult => c !== null); // ← type guard corretto
+      });
+    } catch (e) {
+      console.error(`  [ERROR] smartOptimizeQty failed for ${part.distributor}:`, e);
+    }
+  }
 
   if (scored.length === 0) {
     return noResult(mpn, rawCode, qty, description, resolvedNote,
       "No pricing data available");
   }
 
-  // ── Separa con stock vs senza stock ──────────────────────────────────────
   const withStock    = scored.filter(c => c.feasible);
   const withoutStock = scored.filter(c => !c.feasible);
 
-  // ── Case A: almeno un distributore ha stock → più economico ──────────────
   if (withStock.length > 0) {
     withStock.sort((a, b) => a.totalPrice - b.totalPrice);
-    const w = withStock[0];
-    return buildResult(w, qty, detection.isDistributorCode ? rawCode : undefined,
-      description, resolvedNote);
+    return buildResult(
+      withStock[0], qty,
+      detection.isDistributorCode ? rawCode : undefined,
+      description, resolvedNote
+    );
   }
 
-  // ── Case B: nessuno ha stock → mostra il più economico + fallback ─────────
   if (withoutStock.length === 0) {
-    return noResult(mpn, rawCode, qty, description, resolvedNote,
-      "No pricing data available");
+    return noResult(mpn, rawCode, qty, description, resolvedNote, "No pricing data available");
   }
 
   withoutStock.sort((a, b) => a.totalPrice - b.totalPrice);
   const cheapest = withoutStock[0];
 
-  // Cerca fallback tra chi ha stock parziale
-  const partialStock: ScoredResult[] = allResults
-    .map((part: PartResult): ScoredResult | null => {
-      if (part.stock <= 0) return null;
+  // Fallback con stock parziale
+  const partialStock: ScoredResult[] = [];
+  for (const part of allResults) {
+    if (part.stock <= 0) continue;
+    try {
       const opt = smartOptimizeQty(
-        Math.min(qty, part.stock),
-        part.packageUnit,
-        part.stock,
-        part.priceTiers
+        Math.min(qty, part.stock), part.packageUnit, part.stock, part.priceTiers
       );
-      if (opt.unitPrice === 0) return null;
-      return {
+      if (opt.unitPrice === 0) continue;
+      partialStock.push({
         part,
         optimalQty:      opt.optimalQty,
         unitPrice:       opt.unitPrice,
@@ -142,10 +145,11 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
         packageRounded:  opt.packageRounded,
         priceStepUsed:   opt.priceStepUsed,
         savedVsOriginal: opt.savedVsOriginal,
-      };
-    })
-    .filter((c): c is ScoredResult => c !== null)
-    .sort((a, b) => a.totalPrice - b.totalPrice);
+      });
+    } catch { /* skip */ }
+  }
+
+  partialStock.sort((a, b) => a.totalPrice - b.totalPrice);
 
   let stockFallback: StockFallback | undefined;
   if (partialStock.length > 0) {
@@ -163,14 +167,16 @@ async function searchSingleRow(row: BomRow): Promise<OptimizedResult> {
   }
 
   return {
-    ...buildResult(cheapest, qty, detection.isDistributorCode ? rawCode : undefined,
-      description, resolvedNote),
-    error:         "Out of stock",
+    ...buildResult(
+      cheapest, qty,
+      detection.isDistributorCode ? rawCode : undefined,
+      description, resolvedNote
+    ),
+    error: "Out of stock",
     stockFallback,
   };
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function buildResult(
   c:            ScoredResult,
   requestedQty: number,
