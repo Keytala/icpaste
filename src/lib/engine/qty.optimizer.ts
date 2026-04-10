@@ -1,41 +1,26 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  icpaste.com — Smart Quantity Optimizer v2
-//
-//  Logica:
-//  1. PACKAGE UNIT: arrotonda al multiplo di packageUnit più vicino
-//  2. PRICE STEP:   se il prossimo scaglione di prezzo ha un totale
-//                   inferiore o uguale, proponi quello scaglione
-//  3. BEST DEAL:    confronta tutte le opzioni e restituisce quella
-//                   con il costo totale più basso
-//
-//  Tipi di aggiustamento (per la UI):
-//  - "none"       → nessun aggiustamento
-//  - "package"    → arrotondato al package unit (reel, tray, ecc.)
-//  - "pricestep"  → aumentato per raggiungere uno scaglione più economico
-//  - "both"       → entrambi applicati
-// ─────────────────────────────────────────────────────────────────────────────
-
-import { PriceTier } from "../types";
-
-export type AdjustmentType = "none" | "package" | "pricestep" | "both";
+import { PriceTier, AdjustmentType } from "../types";
 
 export interface OptimizationResult {
-  optimalQty:     number;
-  unitPrice:      number;
-  totalPrice:     number;
-  feasible:       boolean;   // stock >= optimalQty
-  adjustment:     AdjustmentType;
-  packageRounded: boolean;   // qty fu arrotondata al package unit
-  priceStepUsed:  boolean;   // qty fu aumentata per uno scaglione migliore
-  savedVsOriginal: number;   // risparmio in $ rispetto alla qty originale
+  optimalQty:      number;
+  unitPrice:       number;
+  totalPrice:      number;
+  feasible:        boolean;
+  adjustment:      AdjustmentType;
+  packageRounded:  boolean;
+  priceStepUsed:   boolean;
+  savedVsOriginal: number;
 }
 
-/**
- * Calcola la quantità ottimale considerando:
- * - package unit (reel, tray, cut tape)
- * - price breaks (scaglioni di prezzo)
- * - stock disponibile
- */
+function getBestUnitPrice(tiers: PriceTier[], qty: number): number {
+  if (!tiers || tiers.length === 0) return 0;
+  const sorted = [...tiers].sort((a, b) => a.qty - b.qty);
+  let best = sorted[0].price;
+  for (const tier of sorted) {
+    if (qty >= tier.qty) best = tier.price;
+  }
+  return best;
+}
+
 export function smartOptimizeQty(
   requestedQty: number,
   packageUnit:  number,
@@ -43,82 +28,54 @@ export function smartOptimizeQty(
   priceTiers:   PriceTier[]
 ): OptimizationResult {
 
-  const unit = Math.max(packageUnit, 1);
-
-  // ── Step 1: calcola qty base (arrotondata al package unit) ───────────────
-  const packageQty = Math.ceil(requestedQty / unit) * unit;
-
-  // ── Step 2: raccogli tutte le opzioni candidate ───────────────────────────
-  // Opzione A: qty originale (senza arrotondamento)
-  // Opzione B: qty arrotondata al package unit
-  // Opzione C: ogni scaglione di prezzo superiore alla qty richiesta
-
-  const candidates: {
-    qty:            number;
-    packageRounded: boolean;
-    priceStepUsed:  boolean;
-  }[] = [];
-
-  // Opzione A: qty esatta richiesta (se è multiplo del package unit)
-  if (requestedQty % unit === 0) {
-    candidates.push({ qty: requestedQty, packageRounded: false, priceStepUsed: false });
+  // Sanity check
+  if (!priceTiers || priceTiers.length === 0) {
+    return {
+      optimalQty:      requestedQty,
+      unitPrice:       0,
+      totalPrice:      0,
+      feasible:        false,
+      adjustment:      "none",
+      packageRounded:  false,
+      priceStepUsed:   false,
+      savedVsOriginal: 0,
+    };
   }
 
-  // Opzione B: arrotondamento al package unit
+  const unit       = Math.max(packageUnit, 1);
+  const packageQty = Math.ceil(requestedQty / unit) * unit;
+
+  // Candidati
+  const candidates: { qty: number; packageRounded: boolean; priceStepUsed: boolean }[] = [];
+
+  // A: qty esatta (se multiplo del package unit)
+  candidates.push({ qty: requestedQty, packageRounded: false, priceStepUsed: false });
+
+  // B: arrotondamento al package unit
   if (packageQty !== requestedQty) {
     candidates.push({ qty: packageQty, packageRounded: true, priceStepUsed: false });
   }
 
-  // Opzione C: scaglioni di prezzo superiori alla qty richiesta
-  // (consideriamo solo scaglioni che sono anche multipli del package unit)
+  // C: scaglioni di prezzo superiori
   const sortedTiers = [...priceTiers].sort((a, b) => a.qty - b.qty);
-
   for (const tier of sortedTiers) {
-    if (tier.qty <= requestedQty) continue; // scaglioni già coperti
-
-    // Arrotonda lo scaglione al multiplo di packageUnit
+    if (tier.qty <= requestedQty) continue;
     const tierQty = Math.ceil(tier.qty / unit) * unit;
-
-    // Non aggiungere duplicati
-    if (candidates.some(c => c.qty === tierQty)) continue;
-
-    candidates.push({
-      qty:            tierQty,
-      packageRounded: tierQty !== tier.qty,
-      priceStepUsed:  true,
-    });
+    if (!candidates.some(c => c.qty === tierQty)) {
+      candidates.push({ qty: tierQty, packageRounded: tierQty !== tier.qty, priceStepUsed: true });
+    }
   }
 
-  // Assicurati che la qty originale sia sempre tra i candidati
-  if (!candidates.some(c => c.qty === requestedQty)) {
-    candidates.push({ qty: requestedQty, packageRounded: false, priceStepUsed: false });
-  }
-
-  // ── Step 3: calcola prezzo totale per ogni candidato ─────────────────────
-  interface ScoredCandidate {
-    qty:            number;
-    unitPrice:      number;
-    totalPrice:     number;
-    packageRounded: boolean;
-    priceStepUsed:  boolean;
-    feasible:       boolean;
-  }
-
-  const scored: ScoredCandidate[] = candidates
+  // Calcola prezzo per ogni candidato
+  const scored = candidates
     .map(c => {
       const unitPrice  = getBestUnitPrice(sortedTiers, c.qty);
       const totalPrice = parseFloat((unitPrice * c.qty).toFixed(4));
-      return {
-        ...c,
-        unitPrice,
-        totalPrice,
-        feasible: stock >= c.qty,
-      };
+      return { ...c, unitPrice, totalPrice, feasible: stock >= c.qty };
     })
     .filter(c => c.unitPrice > 0);
 
   if (scored.length === 0) {
-    // Fallback: usa qty richiesta senza ottimizzazione
     const unitPrice = getBestUnitPrice(sortedTiers, requestedQty);
     return {
       optimalQty:      requestedQty,
@@ -132,22 +89,19 @@ export function smartOptimizeQty(
     };
   }
 
-  // ── Step 4: trova il candidato con il prezzo totale più basso ────────────
-  // Priorità: candidati feasible (con stock) prima, poi per totalPrice
+  // Priorità: feasible prima, poi per prezzo totale
   const feasible   = scored.filter(c => c.feasible);
   const infeasible = scored.filter(c => !c.feasible);
-
-  const pool = feasible.length > 0 ? feasible : infeasible;
+  const pool       = feasible.length > 0 ? feasible : infeasible;
   pool.sort((a, b) => a.totalPrice - b.totalPrice);
-
   const winner = pool[0];
 
-  // ── Step 5: calcola il risparmio rispetto alla qty originale ─────────────
-  const originalUnitPrice  = getBestUnitPrice(sortedTiers, requestedQty);
-  const originalTotalPrice = parseFloat((originalUnitPrice * requestedQty).toFixed(4));
-  const savedVsOriginal    = parseFloat((originalTotalPrice - winner.totalPrice).toFixed(4));
+  // Risparmio vs qty originale
+  const origPrice      = getBestUnitPrice(sortedTiers, requestedQty);
+  const origTotal      = parseFloat((origPrice * requestedQty).toFixed(4));
+  const savedVsOriginal = parseFloat((origTotal - winner.totalPrice).toFixed(4));
 
-  // ── Step 6: determina il tipo di aggiustamento ───────────────────────────
+  // Tipo aggiustamento
   let adjustment: AdjustmentType = "none";
   if (winner.packageRounded && winner.priceStepUsed) adjustment = "both";
   else if (winner.packageRounded) adjustment = "package";
@@ -165,18 +119,6 @@ export function smartOptimizeQty(
   };
 }
 
-// ── Helper interno ────────────────────────────────────────────────────────────
-function getBestUnitPrice(tiers: PriceTier[], qty: number): number {
-  if (!tiers || tiers.length === 0) return 0;
-  const sorted = [...tiers].sort((a, b) => a.qty - b.qty);
-  let best = sorted[0].price;
-  for (const tier of sorted) {
-    if (qty >= tier.qty) best = tier.price;
-  }
-  return best;
-}
-
-// ── Backward compat (usata da altri moduli) ───────────────────────────────────
 export function optimizeQty(
   requestedQty: number,
   packageUnit:  number,
