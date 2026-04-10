@@ -12,8 +12,6 @@ const USE_MOCK =
   !process.env.MOUSER_API_KEY      ||
   process.env.MOUSER_API_KEY       === "placeholder";
 
-console.log(`[icpaste] Mode: ${USE_MOCK ? "MOCK" : "REAL"}`);
-
 export const distributors: DistributorAdapter[] = USE_MOCK
   ? [MockMouserAdapter, MockDigikeyAdapter, MockFarnellAdapter]
   : [MouserAdapter, DigikeyAdapter];
