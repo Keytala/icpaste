@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { parseBom } from "@/lib/bom-parser";
+import { useRouter }                      from "next/navigation";
+import { parseBom }                       from "@/lib/bom-parser";
 
 const PLACEHOLDER = `LM358N 100
 BC547B 500
@@ -13,11 +13,11 @@ NE555P 250`;
 const DISTRIBUTORS = ["Mouser", "Digi-Key", "Farnell"];
 
 export default function HomePage() {
-  const router              = useRouter();
-  const [input, setInput]   = useState("");
-  const [error, setError]   = useState("");
-  const [loading, setLoading] = useState(false);
-  const textareaRef         = useRef<HTMLTextAreaElement>(null);
+  const router               = useRouter();
+  const [input, setInput]    = useState("");
+  const [error, setError]    = useState("");
+  const [loading, setLoading]= useState(false);
+  const textareaRef          = useRef<HTMLTextAreaElement>(null);
 
   const lineCount = input.split("\n").filter(l => l.trim()).length;
 
@@ -25,7 +25,7 @@ export default function HomePage() {
     setError("");
     const bom = parseBom(input);
     if (!bom.length) {
-      setError("ERR: no valid MPN/QTY pairs found");
+      setError("no valid MPN/QTY pairs found — example: LM358N 100");
       return;
     }
     setLoading(true);
@@ -42,41 +42,42 @@ export default function HomePage() {
 
   return (
     <div style={{
-      minHeight:      "100vh",
-      display:        "flex",
-      flexDirection:  "column",
-      background:     "var(--bg)",
-      fontFamily:     "var(--font)",
+      minHeight:     "100vh",
+      display:       "flex",
+      flexDirection: "column",
+      background:    "var(--bg)",
+      fontFamily:    "var(--font)",
     }}>
 
       {/* ── Header ── */}
       <header style={{
-        borderBottom: "1px solid var(--border)",
-        padding:      "8px 24px",
-        display:      "flex",
-        alignItems:   "center",
+        borderBottom:   "1px solid var(--border)",
+        padding:        "0 32px",
+        height:         52,
+        display:        "flex",
+        alignItems:     "center",
         justifyContent: "space-between",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ color: "var(--green)", fontWeight: 700, fontSize: 16 }}>
-            ic<span style={{ color: "var(--text-3)" }}>paste</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ color: "var(--text-1)", fontWeight: 700, fontSize: 15, letterSpacing: -0.5 }}>
+            icpaste
           </span>
           <span style={{
-            color:      "var(--green-dark)",
-            fontSize:   11,
-            border:     "1px solid var(--green-dark)",
-            padding:    "1px 6px",
+            fontSize:      10,
+            fontWeight:    700,
+            color:         "var(--accent)",
+            background:    "var(--accent-bg)",
+            border:        "1px solid #bfdbfe",
+            padding:       "1px 6px",
+            letterSpacing: 1,
           }}>
             BETA
           </span>
         </div>
-        <div style={{ display: "flex", gap: 16 }}>
+        <div style={{ display: "flex", gap: 20 }}>
           {DISTRIBUTORS.map(d => (
-            <span key={d} style={{
-              color:    "var(--text-3)",
-              fontSize: 12,
-            }}>
-              [{d}]
+            <span key={d} style={{ color: "var(--text-3)", fontSize: 12 }}>
+              {d}
             </span>
           ))}
         </div>
@@ -89,64 +90,78 @@ export default function HomePage() {
         flexDirection:  "column",
         alignItems:     "center",
         justifyContent: "center",
-        padding:        "32px 24px",
+        padding:        "0 24px",
+        overflow:       "auto",
       }}>
-        <div style={{ width: "100%", maxWidth: 800 }}>
+        <div style={{ width: "100%", maxWidth: 820, padding: "32px 0" }}>
 
           {/* Titolo */}
-          <div style={{ marginBottom: 32, textAlign: "center" }}>
-            <div style={{
-              color:      "var(--green)",
-              fontSize:   28,
-              fontWeight: 700,
-              lineHeight: 1.3,
-              marginBottom: 8,
+          <div style={{ marginBottom: 28, textAlign: "center" }}>
+            <h1 style={{
+              fontSize:      38,
+              fontWeight:    700,
+              letterSpacing: -1.5,
+              lineHeight:    1.15,
+              color:         "var(--text-1)",
+              marginBottom:  10,
             }}>
-              FIND THE BEST PRICE<br />
-              <span style={{ color: "var(--text-3)" }}>FOR EVERY COMPONENT.</span>
-            </div>
-            <div style={{ color: "var(--text-3)", fontSize: 13 }}>
-              &gt; paste your BOM below. we search {DISTRIBUTORS.join(", ")} simultaneously.
-            </div>
+              Find the best price<br />
+              <span style={{ color: "var(--text-3)" }}>for every component.</span>
+            </h1>
+            <p style={{ color: "var(--text-3)", fontSize: 13 }}>
+              Paste your BOM. We search {DISTRIBUTORS.join(", ")} simultaneously
+              and return only the best deal — stock included.
+            </p>
           </div>
 
           {/* Input box */}
           <div style={{
             border:     "1px solid var(--border-2)",
-            background: "var(--surface)",
+            background: "var(--bg)",
+            boxShadow:  "0 1px 4px rgba(0,0,0,0.06)",
           }}>
+
             {/* Top bar */}
             <div style={{
               borderBottom:   "1px solid var(--border)",
-              padding:        "6px 12px",
+              padding:        "7px 14px",
+              background:     "var(--surface)",
               display:        "flex",
               justifyContent: "space-between",
               alignItems:     "center",
             }}>
-              <span style={{ color: "var(--text-3)", fontSize: 11 }}>
-                BOM_INPUT.TXT
+              <span style={{ color: "var(--text-3)", fontSize: 11, letterSpacing: 0.5 }}>
+                BOM INPUT
               </span>
               <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                 {lineCount > 0 && (
-                  <span style={{ color: "var(--green)", fontSize: 11 }}>
-                    {lineCount} ROWS
+                  <span style={{
+                    color:      "var(--accent)",
+                    fontSize:   11,
+                    background: "var(--accent-bg)",
+                    border:     "1px solid #bfdbfe",
+                    padding:    "1px 8px",
+                  }}>
+                    {lineCount} rows
                   </span>
                 )}
-                <span style={{ color: "var(--text-3)", fontSize: 11 }}>
-                  MPN · QTY · ONE PER LINE
+                <span style={{ color: "var(--text-4)", fontSize: 11 }}>
+                  MPN · QTY · one per line
                 </span>
               </div>
             </div>
 
-            {/* Textarea */}
+            {/* Body */}
             <div style={{ display: "flex", minHeight: 280 }}>
+
               {/* Line numbers */}
               <div style={{
                 width:       40,
                 borderRight: "1px solid var(--border)",
-                padding:     "12px 0",
-                background:  "var(--bg)",
+                padding:     "14px 0",
+                background:  "var(--surface)",
                 userSelect:  "none",
+                flexShrink:  0,
               }}>
                 {(input || PLACEHOLDER).split("\n").slice(0, 100).map((_, i) => (
                   <div key={i} style={{
@@ -176,13 +191,13 @@ export default function HomePage() {
                   border:     "none",
                   outline:    "none",
                   resize:     "none",
-                  padding:    "12px 16px",
+                  padding:    "14px 16px",
                   fontFamily: "var(--font)",
                   fontSize:   13,
                   lineHeight: "22px",
-                  color:      "var(--green)",
+                  color:      "var(--text-1)",
                   minHeight:  280,
-                  caretColor: "var(--green)",
+                  caretColor: "var(--accent)",
                 }}
               />
             </div>
@@ -190,35 +205,51 @@ export default function HomePage() {
             {/* Bottom bar */}
             <div style={{
               borderTop:      "1px solid var(--border)",
-              padding:        "8px 12px",
+              padding:        "8px 14px",
+              background:     "var(--surface)",
               display:        "flex",
               justifyContent: "space-between",
               alignItems:     "center",
-              background:     "var(--bg)",
+              gap:            12,
             }}>
-              <div style={{ display: "flex", gap: 16, color: "var(--text-3)", fontSize: 11 }}>
-                <span>CSV/TAB/SPACE</span>
-                <span>MAX 1000 ROWS</span>
+              <div style={{
+                display:  "flex",
+                gap:      16,
+                color:    "var(--text-3)",
+                fontSize: 11,
+                flexWrap: "wrap",
+              }}>
+                <span>CSV, tab or space</span>
+                <span>Max 1000 rows</span>
                 <span style={{ color: "var(--text-4)" }}>
-                  [CTRL+ENTER] TO SEARCH
+                  <kbd style={{
+                    background:   "var(--bg)",
+                    border:       "1px solid var(--border-2)",
+                    padding:      "0 5px",
+                    fontSize:     10,
+                    borderRadius: 2,
+                  }}>⌘ Enter</kbd>
+                  {" "}to search
                 </span>
               </div>
               <button
                 onClick={handleSearch}
                 disabled={loading || !input.trim()}
                 style={{
-                  background:  loading || !input.trim() ? "transparent" : "var(--green)",
-                  color:       loading || !input.trim() ? "var(--text-3)" : "var(--bg)",
-                  border:      `1px solid ${loading || !input.trim() ? "var(--border-2)" : "var(--green)"}`,
-                  padding:     "5px 20px",
-                  fontFamily:  "var(--font)",
-                  fontSize:    13,
-                  fontWeight:  700,
-                  cursor:      loading || !input.trim() ? "not-allowed" : "pointer",
-                  letterSpacing: 1,
+                  background:    loading || !input.trim() ? "var(--surface)" : "var(--text-1)",
+                  color:         loading || !input.trim() ? "var(--text-3)" : "var(--bg)",
+                  border:        `1px solid ${loading || !input.trim() ? "var(--border-2)" : "var(--text-1)"}`,
+                  padding:       "6px 20px",
+                  fontFamily:    "var(--font)",
+                  fontSize:      12,
+                  fontWeight:    700,
+                  cursor:        loading || !input.trim() ? "not-allowed" : "pointer",
+                  letterSpacing: 0.5,
+                  flexShrink:    0,
+                  transition:    "all 0.15s",
                 }}
               >
-                {loading ? "SEARCHING..." : "> FIND BEST PRICES"}
+                {loading ? "Searching..." : "Find best prices →"}
               </button>
             </div>
           </div>
@@ -226,7 +257,7 @@ export default function HomePage() {
           {/* Error */}
           {error && (
             <div style={{ color: "var(--red)", fontSize: 12, marginTop: 8 }}>
-              {error}
+              ✗ {error}
             </div>
           )}
 
@@ -235,24 +266,25 @@ export default function HomePage() {
             display:             "grid",
             gridTemplateColumns: "repeat(3, 1fr)",
             gap:                 8,
-            marginTop:           12,
+            marginTop:           10,
           }}>
             {[
-              { label: "MPN + QTY",         example: "LM358N 100",     note: "space separated" },
-              { label: "CSV FORMAT",         example: "LM358N,100",     note: "comma or tab" },
-              { label: "DISTRIBUTOR CODE",   example: "512-LM358N 100", note: "auto-resolved" },
+              { label: "MPN + Quantity",   example: "LM358N 100",     note: "space separated" },
+              { label: "CSV / tab format", example: "LM358N,100",     note: "comma or tab" },
+              { label: "Distributor code", example: "512-LM358N 100", note: "auto-resolved to MPN" },
             ].map(h => (
               <div key={h.label} style={{
                 border:  "1px solid var(--border)",
-                padding: "8px 12px",
+                padding: "9px 12px",
+                background: "var(--surface)",
               }}>
-                <div style={{ color: "var(--text-3)", fontSize: 10, marginBottom: 4 }}>
-                  // {h.label}
+                <div style={{ color: "var(--text-3)", fontSize: 10, marginBottom: 3, letterSpacing: 0.5 }}>
+                  {h.label.toUpperCase()}
                 </div>
-                <div style={{ color: "var(--green)", fontSize: 12 }}>
+                <div style={{ color: "var(--text-1)", fontSize: 12, marginBottom: 2 }}>
                   {h.example}
                 </div>
-                <div style={{ color: "var(--text-4)", fontSize: 10, marginTop: 2 }}>
+                <div style={{ color: "var(--text-4)", fontSize: 10 }}>
                   {h.note}
                 </div>
               </div>
@@ -265,16 +297,17 @@ export default function HomePage() {
       {/* ── Footer ── */}
       <footer style={{
         borderTop:      "1px solid var(--border)",
-        padding:        "8px 24px",
+        height:         52,
         display:        "flex",
-        justifyContent: "space-between",
         alignItems:     "center",
+        padding:        "0 32px",
+        justifyContent: "space-between",
       }}>
         <span style={{ color: "var(--text-4)", fontSize: 11 }}>
-          © {new Date().getFullYear()} ICPASTE.COM
+          © {new Date().getFullYear()} icpaste.com
         </span>
         <span style={{ color: "var(--text-4)", fontSize: 11 }}>
-          BUILT FOR HARDWARE BUYERS
+          Built for hardware buyers
         </span>
       </footer>
 
