@@ -1,108 +1,54 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
 
-/* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── Variabili terminale ── */
 :root {
-  --bg:        #0a0a0a;
-  --surface:   #111111;
-  --border:    #1f1f1f;
-  --border-2:  #2a2a2a;
+  --bg:        #ffffff;
+  --surface:   #f7f7f5;
+  --border:    #e4e4e0;
+  --border-2:  #d0d0ca;
 
-  --green:     #00ff41;
-  --green-dim: #00cc33;
-  --green-dark:#004d14;
-  --green-glow:rgba(0,255,65,0.08);
+  --text-1:    #1a1a18;
+  --text-2:    #4a4a45;
+  --text-3:    #8a8a82;
+  --text-4:    #c0c0b8;
 
-  --amber:     #ffb000;
-  --red:       #ff3333;
-  --cyan:      #00ffff;
+  --accent:    #0066ff;
+  --accent-bg: #f0f4ff;
+  --amber:     #b45309;
+  --amber-bg:  #fffbeb;
+  --red:       #dc2626;
+  --red-bg:    #fef2f2;
+  --green:     #16a34a;
+  --green-bg:  #f0fdf4;
+  --cyan:      #0891b2;
+  --cyan-bg:   #ecfeff;
 
-  --text-1:    #00ff41;
-  --text-2:    #00cc33;
-  --text-3:    #008822;
-  --text-4:    #004d14;
-
-  --font:      'JetBrains Mono', 'Courier New', monospace;
-  --lh:        1.6;
+  --font: 'JetBrains Mono', 'Courier New', monospace;
 }
 
 html {
-  font-family:         var(--font);
-  font-size:           14px;
-  line-height:         var(--lh);
-  background:          var(--bg);
-  color:               var(--text-1);
+  font-family:            var(--font);
+  font-size:              14px;
+  line-height:            1.6;
+  background:             var(--bg);
+  color:                  var(--text-1);
   -webkit-font-smoothing: antialiased;
-  font-variant-numeric: tabular-nums lining-nums;
+  font-variant-numeric:   tabular-nums lining-nums;
 }
 
-body {
-  background: var(--bg);
-  min-height: 100vh;
-}
+body { background: var(--bg); min-height: 100vh; }
 
-/* Scanline effect sottile */
-body::before {
-  content:    "";
-  position:   fixed;
-  inset:      0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0,0,0,0.03) 2px,
-    rgba(0,0,0,0.03) 4px
-  );
-  pointer-events: none;
-  z-index:    9999;
-}
+::selection { background: #dbeafe; color: #1e40af; }
 
-/* ── Scrollbar ── */
 ::-webkit-scrollbar       { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--text-3); }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
 
-/* ── Selection ── */
-::selection { background: var(--green); color: var(--bg); }
+@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scanIn  { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin    { to { transform: rotate(360deg); } }
+@keyframes pulse   { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-/* ── Cursor lampeggiante ── */
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0; }
-}
-
-.cursor::after {
-  content:   "█";
-  animation: blink 1s step-end infinite;
-  color:     var(--green);
-}
-
-/* ── Animazioni ── */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes scanIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}
-
-/* ── Tooltip ── */
-@keyframes fadeUpTooltip {
-  from { opacity: 0; transform: translate(-50%, calc(-100% + 4px)); }
-  to   { opacity: 1; transform: translate(-50%, -100%); }
-}
-
-/* ── Utility ── */
-.fade-in  { animation: fadeIn  0.2s ease forwards; }
-.scan-in  { animation: scanIn  0.15s ease forwards; }
+.fade-in { animation: fadeIn  0.2s ease forwards; }
+.scan-in { animation: scanIn  0.15s ease forwards; }
