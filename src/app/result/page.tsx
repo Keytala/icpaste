@@ -29,19 +29,22 @@ const ADJ_COLOR: Record<Adjustment, string> = {
   both:      "#00ffff",
 };
 
+
 function AdjBadge({ adj, saved, currency }: { adj: Adjustment; saved: number; currency: string }) {
   if (adj === "none") return null;
   return (
-    <span style={{
-      color:        ADJ_COLOR[adj],
-      border:       `1px solid ${ADJ_COLOR[adj]}`,
-      fontSize:     9,
-      padding:      "0 4px",
-      marginLeft:   4,
-      letterSpacing: 0.5,
-      whiteSpace:   "nowrap",
-      title:        saved > 0 ? `saves ${currency} ${saved.toFixed(2)}` : "",
-    }}>
+    <span
+      title={saved > 0 ? `saves ${currency} ${saved.toFixed(2)}` : ADJ_LABEL[adj]}
+      style={{
+        color:         ADJ_COLOR[adj],
+        border:        `1px solid ${ADJ_COLOR[adj]}`,
+        fontSize:      9,
+        padding:       "0 4px",
+        marginLeft:    4,
+        letterSpacing: 0.5,
+        whiteSpace:    "nowrap",
+      }}
+    >
       {ADJ_LABEL[adj]}
       {saved > 0 && ` -${currency}${saved.toFixed(2)}`}
     </span>
