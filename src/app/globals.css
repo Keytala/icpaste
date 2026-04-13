@@ -1,54 +1,46 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #ffffff;
-  --surface:   #f7f7f5;
-  --border:    #e4e4e0;
-  --border-2:  #d0d0ca;
-
-  --text-1:    #1a1a18;
-  --text-2:    #4a4a45;
-  --text-3:    #8a8a82;
-  --text-4:    #c0c0b8;
-
-  --accent:    #0066ff;
-  --accent-bg: #f0f4ff;
-  --amber:     #b45309;
-  --amber-bg:  #fffbeb;
-  --red:       #dc2626;
-  --red-bg:    #fef2f2;
-  --green:     #16a34a;
-  --green-bg:  #f0fdf4;
-  --cyan:      #0891b2;
-  --cyan-bg:   #ecfeff;
-
-  --font: 'JetBrains Mono', 'Courier New', monospace;
+  --font:    'JetBrains Mono', 'Courier New', monospace;
+  --bg:      #ffffff;
+  --surface: #f7f7f7;
+  --border:  #e0e0e0;
+  --text-1:  #111111;
+  --text-2:  #555555;
+  --text-3:  #999999;
+  --accent:  #0066ff;
+  --red:     #cc0000;
+  --green:   #007700;
+  --amber:   #996600;
 }
 
 html {
-  font-family:            var(--font);
-  font-size:              14px;
-  line-height:            1.6;
-  background:             var(--bg);
-  color:                  var(--text-1);
+  font-family: var(--font);
+  font-size:   13px;
+  line-height: 1.6;
+  background:  var(--bg);
+  color:       var(--text-1);
   -webkit-font-smoothing: antialiased;
-  font-variant-numeric:   tabular-nums lining-nums;
 }
 
-body { background: var(--bg); min-height: 100vh; }
+body { min-height: 100vh; }
 
-::selection { background: #dbeafe; color: #1e40af; }
+::selection { background: #0066ff22; }
 
 ::-webkit-scrollbar       { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--border); }
 
-@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-@keyframes scanIn  { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes spin    { to { transform: rotate(360deg); } }
-@keyframes pulse   { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
-.fade-in { animation: fadeIn  0.2s ease forwards; }
-.scan-in { animation: scanIn  0.15s ease forwards; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
