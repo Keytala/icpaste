@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams, useRouter }    from "next/navigation";
-import { SearchResponse, ResultRow }     from "@/lib/types";
+import { useEffect, useState, Suspense }  from "react";
+import { useSearchParams, useRouter }     from "next/navigation";
+import type { SearchResponse, ResultRow } from "@/lib/types";  // ← type-only import
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -54,11 +54,11 @@ const S = {
     color: "var(--accent)",
   },
   main: {
-    flex:    1,
-    padding: "24px 32px",
+    flex:     1,
+    padding:  "24px 32px",
     maxWidth: 1200,
-    margin:  "0 auto",
-    width:   "100%",
+    margin:   "0 auto",
+    width:    "100%",
   },
   stats: {
     display:             "grid",
@@ -89,20 +89,20 @@ const S = {
     lineHeight:    1,
   },
   statSub: {
-    fontSize:   10,
-    color:      "var(--text-3)",
-    marginTop:  4,
+    fontSize:  10,
+    color:     "var(--text-3)",
+    marginTop: 4,
   },
   prodBanner: {
-    border:         "1px solid var(--border)",
-    padding:        "10px 16px",
-    marginBottom:   16,
-    display:        "flex",
-    alignItems:     "center",
-    gap:            16,
-    flexWrap:       "wrap" as const,
-    background:     "var(--surface)",
-    animation:      "fadeIn 0.2s ease",
+    border:       "1px solid var(--border)",
+    padding:      "10px 16px",
+    marginBottom: 16,
+    display:      "flex",
+    alignItems:   "center",
+    gap:          16,
+    flexWrap:     "wrap" as const,
+    background:   "var(--surface)",
+    animation:    "fadeIn 0.2s ease",
   },
   prodLabel: {
     fontSize:   11,
@@ -160,10 +160,10 @@ const S = {
     textAlign: "right" as const,
   },
   td: {
-    padding:      "11px 14px",
-    fontSize:     12,
-    borderBottom: "1px solid var(--border)",
-    verticalAlign:"middle" as const,
+    padding:       "11px 14px",
+    fontSize:      12,
+    borderBottom:  "1px solid var(--border)",
+    verticalAlign: "middle" as const,
   },
   tdRight: {
     textAlign: "right" as const,
@@ -182,31 +182,6 @@ const S = {
     color:      "var(--amber)",
     fontWeight: 600,
   },
-  adjBadge: (adj: string) => ({
-    fontSize:      9,
-    fontWeight:    600,
-    padding:       "1px 5px",
-    border:        `1px solid ${adj === "package" ? "#996600" : adj === "pricestep" ? "#007700" : "#0066ff"}`,
-    color:         adj === "package" ? "#996600" : adj === "pricestep" ? "#007700" : "#0066ff",
-    marginLeft:    4,
-    letterSpacing: "0.05em",
-    cursor:        "help" as const,
-  }),
-  distBtn: (dist: string) => ({
-    display:        "inline-flex",
-    alignItems:     "center",
-    gap:            5,
-    padding:        "4px 10px",
-    fontSize:       11,
-    fontWeight:     600,
-    fontFamily:     "var(--font)",
-    border:         "1px solid",
-    cursor:         "pointer",
-    textDecoration: "none",
-    borderColor:    dist === "Mouser" ? "#1d4ed8" : dist === "Digi-Key" ? "#b45309" : "#15803d",
-    color:          dist === "Mouser" ? "#1d4ed8" : dist === "Digi-Key" ? "#b45309" : "#15803d",
-    background:     dist === "Mouser" ? "#eff6ff" : dist === "Digi-Key" ? "#fffbeb" : "#f0fdf4",
-  }),
   outOfStock: {
     fontSize:   10,
     fontWeight: 600,
@@ -262,7 +237,49 @@ const S = {
   },
 };
 
-// ── Adj Badge ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function adjBadgeStyle(adj: string) {
+  const color =
+    adj === "package"   ? "#996600" :
+    adj === "pricestep" ? "#007700" :
+    "#0066ff";
+  return {
+    fontSize:      9,
+    fontWeight:    600,
+    padding:       "1px 5px",
+    border:        `1px solid ${color}`,
+    color,
+    marginLeft:    4,
+    letterSpacing: "0.05em",
+    cursor:        "help" as const,
+  };
+}
+
+function distBtnStyle(dist: string) {
+  const map: Record<string, { border: string; color: string; background: string }> = {
+    "Mouser":   { border: "#1d4ed8", color: "#1d4ed8", background: "#eff6ff" },
+    "Digi-Key": { border: "#b45309", color: "#b45309", background: "#fffbeb" },
+    "Farnell":  { border: "#15803d", color: "#15803d", background: "#f0fdf4" },
+  };
+  const style = map[dist] ?? { border: "#555", color: "#555", background: "#f5f5f5" };
+  return {
+    display:        "inline-flex",
+    alignItems:     "center",
+    gap:            5,
+    padding:        "4px 10px",
+    fontSize:       11,
+    fontWeight:     600,
+    fontFamily:     "var(--font)",
+    border:         `1px solid ${style.border}`,
+    cursor:         "pointer",
+    textDecoration: "none",
+    color:          style.color,
+    background:     style.background,
+  };
+}
+
+// ── AdjBadge component ────────────────────────────────────────────────────────
 
 function AdjBadge({ adj, saved, currency }: {
   adj:      string;
@@ -270,32 +287,34 @@ function AdjBadge({ adj, saved, currency }: {
   currency: string;
 }) {
   if (adj === "none" || !adj) return null;
-  const label = adj === "package" ? "PKG" : adj === "pricestep" ? "STEP" : "PKG+STEP";
-  const tip   = adj === "package"
-    ? "Rounded to package unit"
-    : adj === "pricestep"
-    ? "Increased to better price tier"
-    : "Package unit + price tier";
+  const label =
+    adj === "package"   ? "PKG" :
+    adj === "pricestep" ? "STEP" :
+    "PKG+STEP";
+  const tip =
+    adj === "package"   ? "Rounded to package unit" :
+    adj === "pricestep" ? "Increased to better price tier" :
+    "Package unit + price tier";
 
   return (
     <span
       title={`${tip}${saved > 0 ? ` — saves ${currency} ${saved.toFixed(2)}` : ""}`}
-      style={S.adjBadge(adj)}
+      style={adjBadgeStyle(adj)}
     >
       {label}{saved > 0 ? ` -${saved.toFixed(2)}` : ""}
     </span>
   );
 }
 
-// ── Result Row ────────────────────────────────────────────────────────────────
+// ── RowItem component (renamed to avoid conflict with ResultRow type) ─────────
 
-function ResultRow({ r, onResolve }: {
+function RowItem({ r, onResolve }: {
   r:         ResultRow;
   onResolve: (mpn: string) => void;
 }) {
-  const isOos      = r.error === "Out of stock";
-  const isNotFound = Boolean(r.error && !isOos);
-  const hasFallback = Boolean(r.fallback);
+  const isOos       = r.error === "Out of stock";
+  const isNotFound  = Boolean(r.error && !isOos);
+  const hasFallback = Boolean((r as any).fallback);
 
   return (
     <tr style={{ borderBottom: "1px solid var(--border)" }}>
@@ -305,8 +324,8 @@ function ResultRow({ r, onResolve }: {
         <div style={S.mpn}>{r.mpn}</div>
         {r.description && (
           <div style={S.desc}>
-            {r.description.length > 40
-              ? r.description.slice(0, 40) + "…"
+            {r.description.length > 45
+              ? r.description.slice(0, 45) + "…"
               : r.description}
           </div>
         )}
@@ -357,7 +376,7 @@ function ResultRow({ r, onResolve }: {
             href={r.productUrl}
             target="_blank"
             rel="noopener noreferrer"
-            style={S.distBtn(r.distributor) as React.CSSProperties}
+            style={distBtnStyle(r.distributor) as React.CSSProperties}
           >
             {r.distributor} ↗
           </a>
@@ -367,17 +386,18 @@ function ResultRow({ r, onResolve }: {
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Main content ──────────────────────────────────────────────────────────────
 
 function ResultsContent() {
-  const params  = useSearchParams();
-  const router  = useRouter();
-  const [data,     setData]     = useState<SearchResponse | null>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState("");
-  const [prodQty,  setProdQty]  = useState("");
+  const params = useSearchParams();
+  const router = useRouter();
+
+  const [data,       setData]       = useState<SearchResponse | null>(null);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState("");
+  const [prodQty,    setProdQty]    = useState("");
   const [activeProd, setActiveProd] = useState(1);
-  const [origData, setOrigData] = useState<SearchResponse | null>(null);
+  const [origData,   setOrigData]   = useState<SearchResponse | null>(null);
 
   useEffect(() => {
     const encoded = params.get("bom");
@@ -406,21 +426,21 @@ function ResultsContent() {
   function handleResolve(mpn: string) {
     if (!data) return;
     const updated = data.results.map(r => {
-      if (r.mpn !== mpn || !r.fallback) return r;
-      const fb = r.fallback;
+      const fb = (r as any).fallback;
+      if (r.mpn !== mpn || !fb) return r;
       return {
         ...r,
-        distributor:  fb.distributor,
-        optimalQty:   fb.optimalQty,
-        unitPrice:    fb.unitPrice,
-        totalPrice:   fb.totalPrice,
-        currency:     fb.currency,
-        stock:        fb.stock,
-        productUrl:   fb.productUrl,
-        adjustment:   "none" as const,
-        saved:        0,
-        error:        undefined,
-        fallback:     undefined,
+        distributor: fb.distributor,
+        optimalQty:  fb.optimalQty,
+        unitPrice:   fb.unitPrice,
+        totalPrice:  fb.totalPrice,
+        currency:    fb.currency,
+        stock:       fb.stock,
+        productUrl:  fb.productUrl,
+        adjustment:  "none" as const,
+        saved:       0,
+        error:       undefined,
+        fallback:    undefined,
       };
     });
     const totalBom = parseFloat(
@@ -434,7 +454,6 @@ function ResultsContent() {
     const n = parseInt(prodQty, 10);
     if (!n || n < 1 || !origData) return;
     setActiveProd(n);
-
     const updated = origData.results.map(r => ({
       ...r,
       requestedQty: r.requestedQty * n,
@@ -453,12 +472,12 @@ function ResultsContent() {
     setData(origData);
   }
 
-  // ── Loading ────────────────────────────────────────────────────────────────
+  // ── Loading / error ────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={S.loading}>
         <div style={{
-          width:  12, height: 12,
+          width: 12, height: 12,
           border: "2px solid var(--border)",
           borderTopColor: "var(--text-1)",
           borderRadius: "50%",
@@ -486,7 +505,9 @@ function ResultsContent() {
   const outOfStock = data.results.filter(r => r.error === "Out of stock");
   const notFound   = data.results.filter(r => r.error && r.error !== "Out of stock");
   const adjusted   = data.results.filter(r => r.adjustment !== "none");
-  const totalSaved = parseFloat(data.results.reduce((s, r) => s + (r.saved ?? 0), 0).toFixed(2));
+  const totalSaved = parseFloat(
+    data.results.reduce((s, r) => s + (r.saved ?? 0), 0).toFixed(2)
+  );
 
   return (
     <div style={S.page}>
@@ -552,10 +573,15 @@ function ResultsContent() {
 
         {/* Production run banner */}
         <div style={S.prodBanner}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-2)", letterSpacing: "0.05em" }}>
+          <span style={{
+            fontSize: 10, fontWeight: 600,
+            color: "var(--text-2)", letterSpacing: "0.05em",
+          }}>
             PRODUCTION_RUN
           </span>
-          <span style={S.prodLabel}>multiply BOM quantities by units to produce:</span>
+          <span style={S.prodLabel}>
+            multiply BOM quantities by units to produce:
+          </span>
           <input
             style={S.prodInput}
             type="number"
@@ -565,13 +591,9 @@ function ResultsContent() {
             onChange={e => setProdQty(e.target.value)}
             onKeyDown={e => e.key === "Enter" && applyProdQty()}
           />
-          <button style={S.btnApply} onClick={applyProdQty}>
-            apply
-          </button>
+          <button style={S.btnApply} onClick={applyProdQty}>apply</button>
           {activeProd > 1 && (
-            <button style={S.btnReset} onClick={resetProdQty}>
-              reset
-            </button>
+            <button style={S.btnReset} onClick={resetProdQty}>reset</button>
           )}
           {activeProd > 1 && (
             <span style={{ fontSize: 10, color: "var(--accent)" }}>
@@ -593,43 +615,26 @@ function ResultsContent() {
             </tr>
           </thead>
           <tbody>
-            {data.results.map(r => (
-              <ResultRow
-                key={r.mpn}
-                r={r}
-                onResolve={handleResolve}
-              />
+            {data.results.map((r, i) => (
+              <RowItem key={`${r.mpn}-${i}`} r={r} onResolve={handleResolve} />
             ))}
           </tbody>
         </table>
 
-        {/* Legend */}
+        {/* Legend + Export */}
         <div style={S.legend}>
           {[
-            { adj: "package",   label: "PKG",      desc: "rounded to package unit"          },
-            { adj: "pricestep", label: "STEP",     desc: "increased to better price tier"   },
-            { adj: "both",      label: "PKG+STEP", desc: "both applied"                     },
+            { adj: "package",   label: "PKG",      desc: "rounded to package unit"        },
+            { adj: "pricestep", label: "STEP",      desc: "increased to better price tier" },
+            { adj: "both",      label: "PKG+STEP",  desc: "both applied"                   },
           ].map(l => (
             <span key={l.adj} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span style={S.adjBadge(l.adj) as React.CSSProperties}>{l.label}</span>
+              <span style={adjBadgeStyle(l.adj) as React.CSSProperties}>{l.label}</span>
               {l.desc}
             </span>
           ))}
           <span style={{ marginLeft: "auto" }}>hover badge for savings</span>
           <button
-            onClick={() => {
-              const rows = data.results.map(r =>
-                `${r.mpn}\t${r.requestedQty}\t${r.optimalQty}\t${r.unitPrice}\t${r.totalPrice}\t${r.distributor}\t${r.productUrl}`
-              ).join("\n");
-              const header = "MPN\tRequested\tBuy Qty\tUnit Price\tTotal\tDistributor\tLink";
-              const blob   = new Blob([header + "\n" + rows], { type: "text/tab-separated-values" });
-              const url    = URL.createObjectURL(blob);
-              const a      = document.createElement("a");
-              a.href       = url;
-              a.download   = `icpaste_bom_${new Date().toISOString().split("T")[0]}.tsv`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
             style={{
               fontSize:   10,
               fontFamily: "var(--font)",
@@ -638,6 +643,20 @@ function ResultsContent() {
               padding:    "2px 8px",
               cursor:     "pointer",
               color:      "var(--text-2)",
+            }}
+            onClick={() => {
+              const header = "MPN\tRequested\tBuy Qty\tUnit Price\tTotal\tDistributor\tLink";
+              const rows   = data.results.map(r =>
+                [r.mpn, r.requestedQty, r.optimalQty,
+                 r.unitPrice, r.totalPrice, r.distributor, r.productUrl].join("\t")
+              ).join("\n");
+              const blob = new Blob([header + "\n" + rows], { type: "text/tab-separated-values" });
+              const url  = URL.createObjectURL(blob);
+              const a    = document.createElement("a");
+              a.href     = url;
+              a.download = `icpaste_${new Date().toISOString().split("T")[0]}.tsv`;
+              a.click();
+              URL.revokeObjectURL(url);
             }}
           >
             export TSV
