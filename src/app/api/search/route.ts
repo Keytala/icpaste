@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
+import { parseBom } from "@/lib/bom-parser";
 import { BomRow, ResultRow, SearchResponse, PriceTier } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  UTILITY — Price calculator
+//  UTILITY
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getBestPrice(tiers: PriceTier[], qty: number): number {
@@ -34,7 +35,6 @@ function calcOptimal(
   const unit   = Math.max(packageUnit, 1);
   const pkgQty = Math.ceil(requestedQty / unit) * unit;
 
-  // Candidati: qty originale, arrotondata al package, scaglioni superiori
   const candidates = new Set<number>();
   candidates.add(requestedQty);
   candidates.add(pkgQty);
@@ -58,13 +58,15 @@ function calcOptimal(
   if (!scored.length) {
     const p = getBestPrice(tiers, requestedQty);
     return {
-      qty: requestedQty, unitPrice: p,
+      qty:        requestedQty,
+      unitPrice:  p,
       totalPrice: parseFloat((p * requestedQty).toFixed(2)),
-      feasible: stock >= requestedQty, adjustment: "none", saved: 0,
+      feasible:   stock >= requestedQty,
+      adjustment: "none",
+      saved:      0,
     };
   }
 
-  // Preferisci feasible, poi più economico
   const feasible = scored.filter(c => c.feasible);
   const pool     = feasible.length ? feasible : scored;
   pool.sort((a, b) => a.total - b.total);
@@ -89,14 +91,9 @@ function calcOptimal(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  DISTRIBUTORS
-//  Per aggiungere un nuovo distributore:
-//  1. Crea una funzione async search[NomeDistributore](mpn, qty)
-//  2. Aggiungila all'array DISTRIBUTORS in fondo a questa sezione
-//  3. Fine — il sistema la chiamerà automaticamente
+//  MOUSER
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Mouser ────────────────────────────────────────────────────────────────────
 async function searchMouser(mpn: string, qty: number): Promise<any[]> {
   const key = process.env.MOUSER_API_KEY;
   if (!key || key === "placeholder") return [];
@@ -133,9 +130,10 @@ async function searchMouser(mpn: string, qty: number): Promise<any[]> {
           .filter((t: PriceTier) => t.qty > 0 && t.price > 0)
           .sort((a: PriceTier, b: PriceTier) => a.qty - b.qty);
 
-        const avail = String(p.Availability ?? "");
-        const stock = parseInt(avail.replace(/[^0-9]/g, "") || "0", 10);
-        const url   = p.ProductDetailUrl
+        const stock = parseInt(
+          String(p.Availability ?? "").replace(/[^0-9]/g, "") || "0", 10
+        );
+        const url = p.ProductDetailUrl
           ? `https://www.mouser.com${p.ProductDetailUrl}`
           : `https://www.mouser.com/Search/Refine?Keyword=${encodeURIComponent(mpn)}`;
 
@@ -159,14 +157,16 @@ async function searchMouser(mpn: string, qty: number): Promise<any[]> {
   }
 }
 
-// ── Digi-Key ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  DIGI-KEY
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function searchDigikey(mpn: string, qty: number): Promise<any[]> {
   const id     = process.env.DIGIKEY_CLIENT_ID;
   const secret = process.env.DIGIKEY_CLIENT_SECRET;
   if (!id || !secret || id === "placeholder") return [];
 
   try {
-    // Token
     const tokenRes = await fetch("https://api.digikey.com/v1/oauth2/token", {
       method:  "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -180,7 +180,6 @@ async function searchDigikey(mpn: string, qty: number): Promise<any[]> {
     const { access_token } = await tokenRes.json();
     if (!access_token) return [];
 
-    // Search
     const searchRes = await fetch("https://api.digikey.com/products/v4/search/keyword", {
       method:  "POST",
       headers: {
@@ -223,7 +222,10 @@ async function searchDigikey(mpn: string, qty: number): Promise<any[]> {
         const stdPkg  = Number(v.StandardPackage ?? 0);
         const moq     = Number(v.MinimumOrderQuantity ?? 1);
         const pkgUnit = stdPkg > 1 ? stdPkg : (moq > 0 ? moq : 1);
-        const url     = String(p.ProductUrl ?? `https://www.digikey.it/products/it?keywords=${encodeURIComponent(mpn)}`);
+        const url     = String(
+          p.ProductUrl ??
+          `https://www.digikey.it/products/it?keywords=${encodeURIComponent(mpn)}`
+        );
 
         results.push({
           distributor: "Digi-Key",
@@ -244,15 +246,19 @@ async function searchDigikey(mpn: string, qty: number): Promise<any[]> {
   }
 }
 
-// ── Farnell ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  FARNELL
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function searchFarnell(mpn: string, _qty: number): Promise<any[]> {
   const key = process.env.FARNELL_API_KEY;
   if (!key || key === "placeholder") return [];
 
   try {
+    const store  = process.env.FARNELL_STORE ?? "it.farnell.com";
     const params = new URLSearchParams({
       "term":                            `manuPartNum:${mpn}`,
-      "storeInfo.id":                    process.env.FARNELL_STORE ?? "it.farnell.com",
+      "storeInfo.id":                    store,
       "storeInfo.type":                  "global",
       "storeInfo.locale":                "it_IT",
       "resultsSettings.offset":          "0",
@@ -282,17 +288,20 @@ async function searchFarnell(mpn: string, _qty: number): Promise<any[]> {
           .filter((t: PriceTier) => t.qty > 0 && t.price > 0)
           .sort((a: PriceTier, b: PriceTier) => a.qty - b.qty);
 
-        const store = process.env.FARNELL_STORE ?? "it.farnell.com";
-        const url   = p.productURL
+        const url = p.productURL
           ? `https://${store}${p.productURL}`
           : `https://${store}/search?st=${encodeURIComponent(p.sku ?? mpn)}`;
 
         return {
           distributor: "Farnell",
-          mpn:         String(p.translatedManufacturerPartNumberList?.[0]?.manufacturerPartNumber ?? mpn),
+          mpn:         String(
+            p.translatedManufacturerPartNumberList?.[0]?.manufacturerPartNumber ?? mpn
+          ),
           description: String(p.displayName ?? ""),
           stock:       Number(p.stock?.level ?? 0),
-          packageUnit: Number(p.packSize ?? 1) > 1 ? Number(p.packSize) : Number(p.minimumOrderQty ?? 1),
+          packageUnit: Number(p.packSize ?? 1) > 1
+            ? Number(p.packSize)
+            : Number(p.minimumOrderQty ?? 1),
           priceTiers:  tiers,
           productUrl:  url,
           currency:    String(p.currency ?? "EUR"),
@@ -305,26 +314,35 @@ async function searchFarnell(mpn: string, _qty: number): Promise<any[]> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  REGISTRY — aggiungi qui i nuovi distributori
-//  Formato: { name: string, fn: (mpn, qty) => Promise<any[]> }
+//  REGISTRY — per aggiungere un distributore:
+//  1. Crea la funzione async searchXXX(mpn, qty): Promise<any[]>
+//  2. Aggiungila qui sotto
+//  Fine — il sistema la chiama automaticamente
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DISTRIBUTORS = [
-  { name: "Mouser",   fn: searchMouser   },
-  { name: "Digi-Key", fn: searchDigikey  },
-  { name: "Farnell",  fn: searchFarnell  },
-  // { name: "TME",   fn: searchTME      },  // ← aggiungi così
-  // { name: "RS",    fn: searchRS       },  // ← aggiungi così
+  { name: "Mouser",   fn: searchMouser  },
+  { name: "Digi-Key", fn: searchDigikey },
+  { name: "Farnell",  fn: searchFarnell },
+  // { name: "TME",   fn: searchTME    },
+  // { name: "RS",    fn: searchRS     },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  MAIN ROUTE
+//  MAIN ROUTE — POST /api/search
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const bom: BomRow[] = Array.isArray(body.bom) ? body.bom : [];
+
+    // Accetta sia { bom: BomRow[] } che { raw: string }
+    let bom: BomRow[] = [];
+    if (Array.isArray(body.bom)) {
+      bom = body.bom;
+    } else if (typeof body.raw === "string") {
+      bom = parseBom(body.raw);
+    }
 
     if (!bom.length) {
       return NextResponse.json({ error: "Empty BOM" }, { status: 400 });
@@ -344,8 +362,13 @@ export async function POST(req: NextRequest) {
           )
         ).flat();
 
-        console.log(`[Search] ${mpn} qty=${qty} → ${allParts.length} total results`);
+        console.log(
+          `[Search] ${mpn} qty=${qty} → ` +
+          DISTRIBUTORS.map((d, i) => `${d.name}:?`).join(" ") +
+          ` total:${allParts.length}`
+        );
 
+        // Nessun risultato
         if (!allParts.length) {
           return {
             mpn, description: "", requestedQty: qty, optimalQty: qty,
@@ -372,11 +395,8 @@ export async function POST(req: NextRequest) {
           };
         }
 
-        // Separa con stock e senza stock
-        const withStock    = optimized.filter(p => p.feasible);
-        const withoutStock = optimized.filter(p => !p.feasible);
-
         // Case A: almeno uno ha stock → prendi il più economico
+        const withStock = optimized.filter(p => p.feasible);
         if (withStock.length > 0) {
           withStock.sort((a, b) => a.totalPrice - b.totalPrice);
           const w = withStock[0];
@@ -396,12 +416,11 @@ export async function POST(req: NextRequest) {
           };
         }
 
-        // Case B: nessuno ha stock → mostra il più economico + fallback
-        withoutStock.sort((a, b) => a.totalPrice - b.totalPrice);
-        const cheapest = withoutStock[0];
+        // Case B: nessuno ha stock → più economico + fallback
+        const withoutStock = [...optimized].sort((a, b) => a.totalPrice - b.totalPrice);
+        const cheapest     = withoutStock[0];
 
-        // Cerca fallback tra chi ha stock parziale
-        const partialStock = allParts
+        const partialFallback = allParts
           .filter(p => p.stock > 0)
           .map(p => {
             const opt = calcOptimal(
@@ -429,14 +448,14 @@ export async function POST(req: NextRequest) {
           adjustment:   cheapest.adjustment,
           saved:        cheapest.saved,
           error:        "Out of stock",
-          fallback:     partialStock.length > 0 ? {
-            distributor: partialStock[0].distributor,
-            optimalQty:  partialStock[0].qty,
-            unitPrice:   partialStock[0].unitPrice,
-            totalPrice:  partialStock[0].totalPrice,
-            stock:       partialStock[0].stock,
-            productUrl:  partialStock[0].productUrl,
-            currency:    partialStock[0].currency,
+          fallback:     partialFallback.length > 0 ? {
+            distributor: partialFallback[0].distributor,
+            optimalQty:  partialFallback[0].qty,
+            unitPrice:   partialFallback[0].unitPrice,
+            totalPrice:  partialFallback[0].totalPrice,
+            stock:       partialFallback[0].stock,
+            productUrl:  partialFallback[0].productUrl,
+            currency:    partialFallback[0].currency,
           } : undefined,
         };
       })
