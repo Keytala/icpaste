@@ -238,7 +238,13 @@ export async function POST(req: NextRequest) {
           DISTRIBUTORS.map(fn => fn(mpn, qty).catch(() => []))
         )).flat();
 
-        console.log(`[Search] ${mpn} qty=${qty} total=${allParts.length}`);
+       const mouserCount  = allParts.filter((p: any) => p.distributor === "Mouser").length;
+
+      const digikeyCount = allParts.filter((p: any) => p.distributor === "Digi-Key").length;
+    
+      const farnellCount = allParts.filter((p: any) => p.distributor === "Farnell").length;
+
+      console.log(`[Search] ${mpn} qty=${qty} Mouser:${mouserCount} DigiKey:${digikeyCount} Farnell:${farnellCount} total:${allParts.length}`);
 
         if (!allParts.length) {
           return { mpn, description: "", requestedQty: qty, optimalQty: qty, unitPrice: 0, totalPrice: 0, currency: "USD", distributor: "—", stock: 0, productUrl: "", adjustment: "none", saved: 0, error: "Not found" };
