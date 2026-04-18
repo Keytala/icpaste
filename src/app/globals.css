@@ -1,46 +1,42 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --font:    'JetBrains Mono', 'Courier New', monospace;
-  --bg:      #ffffff;
-  --surface: #f7f7f7;
-  --border:  #e0e0e0;
-  --text-1:  #111111;
-  --text-2:  #555555;
-  --text-3:  #999999;
-  --accent:  #0066ff;
-  --red:     #cc0000;
-  --green:   #007700;
-  --amber:   #996600;
+  --bg:       #ffffff;
+  --fg:       #0a0a0a;
+  --fg-2:     #6b7280;
+  --fg-3:     #9ca3af;
+  --border:   #e5e7eb;
+  --surface:  #f9fafb;
+  --brand:    #0a0a0a;
+  --brand-fg: #ffffff;
+  --green:    #16a34a;
+  --amber:    #d97706;
+  --red:      #dc2626;
+  --radius:   6px;
+  --radius-lg: 10px;
+  --shadow:   0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
 }
 
-html {
-  font-family: var(--font);
-  font-size:   13px;
-  line-height: 1.6;
-  background:  var(--bg);
-  color:       var(--text-1);
-  -webkit-font-smoothing: antialiased;
-}
+html { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
+body { background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; }
 
-body { min-height: 100vh; }
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; }
+input, textarea { font-family: inherit; }
 
-::selection { background: #0066ff22; }
+::selection { background: #0a0a0a; color: #fff; }
 
-::-webkit-scrollbar       { width: 4px; height: 4px; }
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+.fade-in { animation: fadeIn 0.2s ease forwards; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0; }
-}
