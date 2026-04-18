@@ -1,8 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  icpaste v2 — BOM Parser
-//  Supporta: "MPN QTY", "MPN,QTY", "MPN;QTY", "MPN\tQTY"
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { BomRow } from "./types";
 
 export function parseBom(raw: string): BomRow[] {
@@ -10,16 +5,20 @@ export function parseBom(raw: string): BomRow[] {
     .split("\n")
     .map(l => l.trim())
     .filter(l => l && !l.startsWith("#") && !l.startsWith("//"))
-    .map(line => {
-      // Separa per tab, virgola, punto e virgola o spazio
-      const parts = line.split(/[\t,;]+|\s+/);
-      const mpn   = parts[0]?.trim().toUpperCase();
-      // Cerca il primo numero nella riga
-      const qtyStr = parts.slice(1).find(p => /^\d+$/.test(p.trim()));
-      const qty    = parseInt(qtyStr ?? "0", 10);
-      if (!mpn || qty <= 0) return null;
-      return { mpn, qty };
+    .flatMap(line => {
+      // Supporta: space, tab, comma, semicolon
+      const parts = line.split(/[\t,;\s]+/).filter(Boolean);
+      if (parts.length < 2) return [];
+      // Trova il primo token numerico come qty
+      for (let i = 1; i < parts.length; i++) {
+        const qty = parseInt(parts[i].replace(/[^0-9]/g, ""), 10);
+        if (qty > 0) {
+          const mpn = parts.slice(0, i).join(" ").toUpperCase().trim();
+          if (mpn) return [{ mpn, qty }];
+        }
+      }
+      return [];
     })
-    .filter((r): r is BomRow => r !== null)
-    .slice(0, 1000); // max 1000 righe
+    .filter((r): r is BomRow => !!r.mpn && r.qty > 0)
+    .slice(0, 1000);
 }
