@@ -1,240 +1,70 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams, useRouter }    from "next/navigation";
-import type { SearchResponse, ResultRow, Adjustment } from "@/lib/types";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams }        from "next/navigation";
+import { Suspense }                          from "react";
+import type { ResultRow, SearchResponse }    from "@/lib/types";
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  STYLES
-// ─────────────────────────────────────────────────────────────────────────────
-
-const font = "'JetBrains Mono', 'Courier New', monospace";
-
-const css = {
-  page: {
-    minHeight: "100vh", display: "flex", flexDirection: "column" as const,
-    background: "#fff", fontFamily: font, color: "#111",
-  },
-  header: {
-    borderBottom: "1px solid #e5e7eb", padding: "0 28px", height: 44,
-    display: "flex", alignItems: "center", justifyContent: "space-between",
-    position: "sticky" as const, top: 0, background: "rgba(255,255,255,0.97)",
-    zIndex: 10, flexShrink: 0,
-  },
-  btnBack: {
-    fontSize: 11, color: "#666", background: "none", border: "none",
-    cursor: "pointer", fontFamily: font, padding: 0, letterSpacing: "0.03em",
-  },
-  logo: { fontSize: 13, fontWeight: 700, letterSpacing: "-0.3px" },
-  logoAccent: { color: "#2563eb" },
-  main: { flex: 1, padding: "20px 28px", maxWidth: 1200, margin: "0 auto", width: "100%" },
-  stats: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: 1, border: "1px solid #e5e7eb", marginBottom: 16,
-    background: "#e5e7eb", animation: "fadeIn 0.2s ease",
-  },
-  statCard: { padding: "12px 16px", background: "#fff" },
-  statLabel: {
-    fontSize: 9, fontWeight: 600, letterSpacing: "0.1em",
-    color: "#999", textTransform: "uppercase" as const, marginBottom: 4,
-  },
-  statValue: { fontSize: 20, fontWeight: 600, letterSpacing: "-0.5px", lineHeight: 1 },
-  statSub: { fontSize: 10, color: "#999", marginTop: 3 },
-  prodBanner: {
-    border: "1px solid #e5e7eb", padding: "8px 14px", marginBottom: 14,
-    display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" as const,
-    background: "#fafafa", animation: "fadeIn 0.2s ease",
-  },
-  prodTag: {
-    fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-    color: "#999", textTransform: "uppercase" as const,
-  },
-  prodInput: {
-    width: 72, padding: "3px 7px", fontFamily: font, fontSize: 11,
-    border: "1px solid #e5e7eb", background: "#fff", color: "#111", outline: "none",
-  },
-  btnApply: {
-    padding: "3px 10px", background: "#111", color: "#fff",
-    border: "none", fontFamily: font, fontSize: 10, cursor: "pointer", fontWeight: 600,
-  },
-  btnReset: {
-    padding: "3px 10px", background: "none", color: "#666",
-    border: "1px solid #e5e7eb", fontFamily: font, fontSize: 10, cursor: "pointer",
-  },
-  tableWrap: { border: "1px solid #e5e7eb", animation: "fadeIn 0.3s ease", overflowX: "auto" as const },
-  table: { width: "100%", borderCollapse: "collapse" as const, minWidth: 700 },
-  th: {
-    padding: "8px 14px", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em",
-    textTransform: "uppercase" as const, color: "#999", borderBottom: "1px solid #e5e7eb",
-    background: "#fafafa", textAlign: "left" as const, whiteSpace: "nowrap" as const,
-  },
-  thR: { textAlign: "right" as const },
-  tr: { borderBottom: "1px solid #f3f4f6" },
-  td: { padding: "10px 14px", fontSize: 12, verticalAlign: "middle" as const },
-  tdR: { textAlign: "right" as const },
-  mpn: { fontWeight: 600, fontSize: 13, letterSpacing: "-0.2px" },
-  desc: { fontSize: 10, color: "#999", marginTop: 2 },
-  qtyAdj: { color: "#d97706", fontWeight: 600 },
-  oos: {
-    fontSize: 9, fontWeight: 700, color: "#b45309",
-    border: "1px solid #b45309", padding: "2px 6px", letterSpacing: "0.05em",
-  },
-  btnResolve: {
-    marginLeft: 6, fontSize: 9, fontWeight: 700, color: "#fff",
-    background: "#15803d", border: "none", padding: "2px 7px",
-    cursor: "pointer", fontFamily: font, letterSpacing: "0.05em",
-  },
-  notFound: { fontSize: 10, color: "#bbb" },
-  legend: {
-    display: "flex", alignItems: "center", gap: 14, marginTop: 10,
-    fontSize: 10, color: "#999", flexWrap: "wrap" as const,
-  },
-  footer: {
-    borderTop: "1px solid #e5e7eb", height: 38, display: "flex",
-    alignItems: "center", justifyContent: "space-between",
-    padding: "0 28px", flexShrink: 0, fontSize: 10, color: "#bbb",
-  },
-  loading: {
-    minHeight: "100vh", display: "flex", flexDirection: "column" as const,
-    alignItems: "center", justifyContent: "center", gap: 10,
-    fontFamily: font, fontSize: 11, color: "#999",
-  },
+// ── Colori distributori ───────────────────────────────────────────────────────
+const DIST_COLOR: Record<string, string> = {
+  "Mouser":       "#16a34a",
+  "Digi-Key":     "#d97706",
+  "Farnell":      "#2563eb",
+  "TME":          "#7c3aed",
+  "RS Components":"#dc2626",
+  "Arrow":        "#0891b2",
+  "Avnet":        "#0a0a0a",
+  "LCSC":         "#15803d",
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  BADGE
-// ─────────────────────────────────────────────────────────────────────────────
-
-const ADJ_META: Record<string, { label: string; color: string; desc: string }> = {
-  package:   { label: "PKG",      color: "#d97706", desc: "rounded to package unit"        },
-  pricestep: { label: "STEP",     color: "#15803d", desc: "increased to better price tier" },
-  both:      { label: "PKG+STEP", color: "#7c3aed", desc: "both applied"                   },
+const distColor = (name: string) => {
+  for (const [k, v] of Object.entries(DIST_COLOR)) {
+    if (name.toLowerCase().includes(k.toLowerCase())) return v;
+  }
+  return "#6b7280";
 };
 
-function Badge({ adj, saved, currency }: { adj: Adjustment; saved: number; currency: string }) {
-  const meta = ADJ_META[adj];
-  if (!meta) return null;
+// ── Badge aggiustamento ───────────────────────────────────────────────────────
+const ADJ_CONFIG = {
+  package:  { label: "PKG",      color: "#d97706", bg: "#fffbeb", border: "#fde68a", title: "Rounded to package unit"       },
+  pricestep:{ label: "STEP",     color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", title: "Increased to better price tier" },
+  both:     { label: "PKG+STEP", color: "#7c3aed", bg: "#faf5ff", border: "#e9d5ff", title: "Package + price tier applied"   },
+};
+
+function AdjBadge({ adj, saved, currency }: { adj: ResultRow["adjustment"]; saved: number; currency: string }) {
+  if (adj === "none" || !ADJ_CONFIG[adj]) return null;
+  const c = ADJ_CONFIG[adj];
   return (
     <span
-      title={`${meta.desc}${saved > 0 ? ` — saves ${currency} ${saved.toFixed(2)}` : ""}`}
-      style={{
-        fontSize: 9, fontWeight: 700, padding: "1px 5px", marginLeft: 5,
-        border: `1px solid ${meta.color}`, color: meta.color,
-        letterSpacing: "0.05em", cursor: "help",
-      }}
+      title={saved > 0 ? `${c.title} — saves ${currency} ${saved.toFixed(2)}` : c.title}
+      style={{ fontSize: 9, fontWeight: 700, color: c.color, background: c.bg, border: `1px solid ${c.border}`, padding: "1px 6px", borderRadius: 99, marginLeft: 4, cursor: "help", whiteSpace: "nowrap" }}
     >
-      {meta.label}{saved > 0 ? ` -${saved.toFixed(2)}` : ""}
+      {c.label}{saved > 0 ? ` -${saved.toFixed(2)}` : ""}
     </span>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  DISTRIBUTOR BUTTON
-// ─────────────────────────────────────────────────────────────────────────────
-
-const DIST_COLORS: Record<string, { bg: string; color: string; border: string }> = {
-  "Mouser":   { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
-  "Digi-Key": { bg: "#fffbeb", color: "#b45309", border: "#fde68a" },
-  "Farnell":  { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
-};
-
-function DistBtn({ name, url }: { name: string; url: string }) {
-  const c = DIST_COLORS[name] ?? { bg: "#f5f5f5", color: "#555", border: "#ddd" };
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 5,
-        padding: "4px 10px", fontSize: 11, fontWeight: 600,
-        fontFamily: font, border: `1px solid ${c.border}`,
-        textDecoration: "none", color: c.color, background: c.bg,
-        whiteSpace: "nowrap" as const,
-      }}
-    >
-      {name} ↗
-    </a>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  ROW
-// ─────────────────────────────────────────────────────────────────────────────
-
-function Row({ r, onResolve }: { r: ResultRow; onResolve: (mpn: string) => void }) {
-  const isOos      = r.error === "Out of stock";
-  const isNotFound = Boolean(r.error && !isOos);
-  const hasFallback = Boolean((r as any).fallback);
-
-  return (
-    <tr style={css.tr}>
-      <td style={css.td}>
-        <div style={css.mpn}>{r.mpn}</div>
-        {r.description && (
-          <div style={css.desc}>
-            {r.description.length > 50 ? r.description.slice(0, 50) + "…" : r.description}
-          </div>
-        )}
-      </td>
-      <td style={{ ...css.td, ...css.tdR, color: "#999" }}>
-        {r.requestedQty.toLocaleString()}
-      </td>
-      <td style={{ ...css.td, ...css.tdR }}>
-        {isNotFound ? "—" : (
-          <span style={r.adjustment !== "none" ? css.qtyAdj : {}}>
-            {r.optimalQty.toLocaleString()}
-            <Badge adj={r.adjustment} saved={r.saved} currency={r.currency} />
-          </span>
-        )}
-      </td>
-      <td style={{ ...css.td, ...css.tdR, color: "#666" }}>
-        {isNotFound ? "—" : `${r.currency} ${r.unitPrice.toFixed(4)}`}
-      </td>
-      <td style={{ ...css.td, ...css.tdR, fontWeight: 600 }}>
-        {isNotFound ? "—" : `${r.currency} ${r.totalPrice.toFixed(2)}`}
-      </td>
-      <td style={{ ...css.td, ...css.tdR }}>
-        {isNotFound ? (
-          <span style={css.notFound}>not found</span>
-        ) : isOos ? (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <span style={css.oos}>OUT OF STOCK</span>
-            {hasFallback && (
-              <button style={css.btnResolve} onClick={() => onResolve(r.mpn)}>
-                RESOLVE
-              </button>
-            )}
-          </span>
-        ) : (
-          <DistBtn name={r.distributor} url={r.productUrl} />
-        )}
-      </td>
-    </tr>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  MAIN
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ── Componente principale ─────────────────────────────────────────────────────
 function ResultsContent() {
-  const params = useSearchParams();
-  const router = useRouter();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
 
-  const [data,       setData]       = useState<SearchResponse | null>(null);
-  const [origData,   setOrigData]   = useState<SearchResponse | null>(null);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState("");
-  const [prodQty,    setProdQty]    = useState("");
+  const [data, setData]         = useState<SearchResponse | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState("");
+  const [rows, setRows]         = useState<ResultRow[]>([]);
+
+  // Production run
+  const [prodQty, setProdQty]   = useState("");
   const [activeProd, setActiveProd] = useState(1);
 
   useEffect(() => {
-    const encoded = params.get("bom");
-    if (!encoded) { router.push("/"); return; }
-    let bom;
-    try { bom = JSON.parse(atob(encoded)); }
-    catch { router.push("/"); return; }
+    const raw = searchParams.get("bom");
+    if (!raw) { setError("No BOM data found."); setLoading(false); return; }
+
+    let bom: { mpn: string; qty: number }[];
+    try { bom = JSON.parse(atob(raw)); }
+    catch { setError("Invalid BOM data."); setLoading(false); return; }
 
     fetch("/api/search", {
       method:  "POST",
@@ -242,225 +72,269 @@ function ResultsContent() {
       body:    JSON.stringify({ bom }),
     })
       .then(r => r.json())
-      .then(json => {
-        if (json.error) { setError(json.error); return; }
-        setData(json);
-        setOrigData(json);
+      .then((d: SearchResponse) => {
+        setData(d);
+        setRows(d.results);
+        setLoading(false);
       })
-      .catch(() => setError("network error"))
-      .finally(() => setLoading(false));
-  }, [params, router]);
+      .catch(() => { setError("Search failed. Please try again."); setLoading(false); });
+  }, [searchParams]);
 
-  function handleResolve(mpn: string) {
-    if (!data) return;
-    const updated = data.results.map(r => {
-      const fb = (r as any).fallback;
-      if (r.mpn !== mpn || !fb) return r;
+  const handleResolve = useCallback((idx: number) => {
+    if (!rows[idx]?.fallback) return;
+    setRows(prev => prev.map((r, i) => {
+      if (i !== idx || !r.fallback) return r;
       return {
-        ...r, distributor: fb.distributor, optimalQty: fb.optimalQty,
-        unitPrice: fb.unitPrice, totalPrice: fb.totalPrice,
-        currency: fb.currency, stock: fb.stock, productUrl: fb.productUrl,
-        adjustment: "none" as const, saved: 0, error: undefined, fallback: undefined,
+        ...r,
+        optimalQty:  r.fallback.optimalQty,
+        unitPrice:   r.fallback.unitPrice,
+        totalPrice:  r.fallback.totalPrice,
+        distributor: r.fallback.distributor,
+        stock:       r.fallback.stock,
+        productUrl:  r.fallback.productUrl,
+        currency:    r.fallback.currency,
+        error:       undefined,
+        fallback:    undefined,
       };
-    });
-    const totalBom = parseFloat(updated.reduce((s, r) => s + (r.totalPrice ?? 0), 0).toFixed(2));
-    setData({ ...data, results: updated, totalBom });
-  }
+    }));
+  }, [rows]);
 
-  function applyProd() {
+  const handleApplyProd = useCallback(() => {
     const n = parseInt(prodQty, 10);
-    if (!n || n < 1 || !origData) return;
+    if (!n || n < 1 || !data) return;
     setActiveProd(n);
-    const updated = origData.results.map(r => ({
+    setRows(data.results.map(r => ({
       ...r,
       requestedQty: r.requestedQty * n,
       optimalQty:   r.optimalQty   * n,
-      totalPrice:   parseFloat((r.unitPrice * r.optimalQty * n).toFixed(2)),
-    }));
-    const totalBom = parseFloat(updated.reduce((s, r) => s + r.totalPrice, 0).toFixed(2));
-    setData({ ...origData, results: updated, totalBom });
-  }
+      totalPrice:   parseFloat((r.totalPrice * n).toFixed(2)),
+    })));
+  }, [prodQty, data]);
 
-  function resetProd() {
+  const handleReset = useCallback(() => {
+    if (!data) return;
     setActiveProd(1);
     setProdQty("");
-    setData(origData);
-  }
+    setRows(data.results);
+  }, [data]);
 
-  if (loading) {
-    return (
-      <div style={css.loading}>
-        <div style={{
-          width: 14, height: 14, border: "2px solid #e5e7eb",
-          borderTopColor: "#111", borderRadius: "50%",
-          animation: "spin 0.6s linear infinite",
-        }} />
-        searching distributors...
+  // ── Loading ────────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        {["Mouser", "Digi-Key", "Farnell"].map((d, i) => (
+          <span key={d} style={{ fontSize: 12, color: "var(--fg-2)", background: "var(--surface)", border: "1px solid var(--border)", padding: "5px 12px", borderRadius: 99, animation: `fadeIn 0.3s ease ${i * 0.1}s both` }}>{d}</span>
+        ))}
       </div>
-    );
-  }
+      <p style={{ fontSize: 13, color: "var(--fg-3)" }}>Searching best prices…</p>
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div style={css.loading}>
-        <span style={{ color: "#dc2626" }}>error: {error}</span>
-        <button style={css.btnBack} onClick={() => router.push("/")}>← back</button>
+  if (error) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center" }}>
+        <p style={{ color: "var(--red)", marginBottom: 16 }}>{error}</p>
+        <button onClick={() => router.push("/")} style={{ padding: "8px 16px", background: "var(--brand)", color: "var(--brand-fg)", border: "none", borderRadius: "var(--radius)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>← New search</button>
       </div>
-    );
-  }
+    </div>
+  );
 
   if (!data) return null;
 
-  const found      = data.results.filter(r => !r.error);
-  const oos        = data.results.filter(r => r.error === "Out of stock");
-  const notFound   = data.results.filter(r => r.error && r.error !== "Out of stock");
-  const adjusted   = data.results.filter(r => r.adjustment !== "none");
-  const totalSaved = parseFloat(data.results.reduce((s, r) => s + (r.saved ?? 0), 0).toFixed(2));
-  const currency   = data.results.find(r => r.currency)?.currency ?? "USD";
+  // Stats
+  const found   = rows.filter(r => !r.error || r.error === "Out of stock").length;
+  const savings = rows.reduce((s, r) => s + (r.saved ?? 0), 0);
+  const totalBom = rows.reduce((s, r) => s + (r.totalPrice ?? 0), 0);
+
+  // Distributori usati
+  const distUsed = [...new Set(rows.filter(r => r.distributor !== "—").map(r => r.distributor))];
 
   return (
-    <div style={css.page}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--bg)" }}>
 
-      {/* Header */}
-      <header style={css.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <button style={css.btnBack} onClick={() => router.push("/")}>← new search</button>
-          <span style={{ color: "#e5e7eb" }}>|</span>
-          <span style={css.logo}>ic<span style={css.logoAccent}>paste</span></span>
+      {/* ── Header ── */}
+      <header style={{ borderBottom: "1px solid var(--border)", height: 52, display: "flex", alignItems: "center", position: "sticky", top: 0, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)", zIndex: 10 }}>
+        <div style={{ maxWidth: 1100, width: "100%", margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button onClick={() => router.push("/")} style={{ fontSize: 13, color: "var(--fg-2)", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: "var(--radius)" }}>
+              ← New search
+            </button>
+            <span style={{ width: 1, height: 16, background: "var(--border)" }} />
+            <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: -0.3 }}>icpaste</span>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {distUsed.map(d => (
+              <span key={d} style={{ fontSize: 11, fontWeight: 600, color: distColor(d), background: distColor(d) + "18", border: `1px solid ${distColor(d)}40`, padding: "3px 10px", borderRadius: 99 }}>
+                <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: distColor(d), marginRight: 5, verticalAlign: "middle" }} />
+                {d} · {rows.filter(r => r.distributor === d).length}
+              </span>
+            ))}
+          </div>
         </div>
-        <span style={{ fontSize: 10, color: "#bbb" }}>
-          {new Date(data.searchedAt).toLocaleTimeString()}
-        </span>
       </header>
 
-      <main style={css.main}>
+      {/* ── Main ── */}
+      <main style={{ flex: 1, maxWidth: 1100, width: "100%", margin: "0 auto", padding: "24px 24px" }}>
 
         {/* Stats */}
-        <div style={css.stats}>
-          <div style={css.statCard}>
-            <div style={css.statLabel}>BOM Total</div>
-            <div style={{ ...css.statValue, color: "#2563eb" }}>
-              {currency} {data.totalBom.toFixed(2)}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }} className="fade-in">
+          {[
+            { label: "BOM Total",         value: `${rows[0]?.currency ?? "USD"} ${totalBom.toFixed(2)}`, sub: "estimated cost",      accent: true },
+            { label: "Found",             value: `${found} / ${rows.length}`,                            sub: "components with stock" },
+            { label: "Optimized Savings", value: `$${savings.toFixed(2)}`,                               sub: `${rows.filter(r => r.adjustment !== "none").length} qty adjusted`, green: savings > 0 },
+          ].map(s => (
+            <div key={s.label} style={{ background: s.green ? "#f0fdf4" : "var(--surface)", border: `1px solid ${s.green ? "#bbf7d0" : "var(--border)"}`, borderRadius: "var(--radius)", padding: "16px 20px" }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.1, textTransform: "uppercase", color: "var(--fg-3)", marginBottom: 6 }}>{s.label}</div>
+              <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, color: s.accent ? "var(--brand)" : s.green ? "var(--green)" : "var(--fg)" }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 4 }}>{s.sub}</div>
             </div>
-            {activeProd > 1 && <div style={css.statSub}>× {activeProd} units</div>}
-          </div>
-          <div style={css.statCard}>
-            <div style={css.statLabel}>Found</div>
-            <div style={css.statValue}>{found.length} / {data.results.length}</div>
-            <div style={css.statSub}>with stock</div>
-          </div>
-          {totalSaved > 0 && (
-            <div style={{ ...css.statCard, background: "#f0fdf4" }}>
-              <div style={css.statLabel}>Saved</div>
-              <div style={{ ...css.statValue, color: "#15803d" }}>
-                {currency} {totalSaved.toFixed(2)}
-              </div>
-              <div style={css.statSub}>{adjusted.length} qty optimized</div>
-            </div>
-          )}
-          {oos.length > 0 && (
-            <div style={{ ...css.statCard, background: "#fffbeb" }}>
-              <div style={css.statLabel}>Out of stock</div>
-              <div style={{ ...css.statValue, color: "#b45309" }}>{oos.length}</div>
-              <div style={css.statSub}>click resolve</div>
-            </div>
-          )}
-          {notFound.length > 0 && (
-            <div style={css.statCard}>
-              <div style={css.statLabel}>Not found</div>
-              <div style={css.statValue}>{notFound.length}</div>
-              <div style={css.statSub}>check MPN</div>
-            </div>
-          )}
+          ))}
         </div>
 
-        {/* Production run */}
-        <div style={css.prodBanner}>
-          <span style={css.prodTag}>production_run</span>
-          <span style={{ fontSize: 10, color: "#666" }}>
-            multiply quantities by units to produce:
-          </span>
-          <input
-            style={css.prodInput}
-            type="number" min={1} placeholder="e.g. 500"
-            value={prodQty}
-            onChange={e => setProdQty(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && applyProd()}
-          />
-          <button style={css.btnApply} onClick={applyProd}>apply</button>
-          {activeProd > 1 && (
-            <>
-              <button style={css.btnReset} onClick={resetProd}>reset</button>
-              <span style={{ fontSize: 10, color: "#2563eb" }}>× {activeProd} active</span>
-            </>
-          )}
+        {/* Production Run Banner */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 16px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "var(--radius)", marginBottom: 14, flexWrap: "wrap" }} className="fade-in">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#0369a1", marginBottom: 2 }}>🏭 Production Run</div>
+            <div style={{ fontSize: 11, color: "#0284c7", lineHeight: 1.5 }}>Multiply BOM quantities by the number of finished units. Stock checks and price breaks are recalculated automatically.</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "#0369a1", fontWeight: 500, whiteSpace: "nowrap" }}>Units to produce:</span>
+            <input
+              type="number" min={1} placeholder="e.g. 500"
+              value={prodQty} onChange={e => setProdQty(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleApplyProd()}
+              style={{ width: 90, padding: "5px 8px", fontSize: 13, border: "1px solid #bae6fd", borderRadius: "var(--radius)", outline: "none", background: "white" }}
+            />
+            <button onClick={handleApplyProd} style={{ padding: "5px 14px", background: "var(--brand)", color: "white", border: "none", borderRadius: "var(--radius)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              Apply ✓
+            </button>
+            {activeProd > 1 && (
+              <button onClick={handleReset} style={{ padding: "5px 10px", background: "white", color: "#0369a1", border: "1px solid #bae6fd", borderRadius: "var(--radius)", fontSize: 12, cursor: "pointer" }}>
+                Reset ×
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Table */}
-        <div style={css.tableWrap}>
-          <table style={css.table}>
-            <thead>
-              <tr>
-                <th style={css.th}>MPN</th>
-                <th style={{ ...css.th, ...css.thR }}>Requested</th>
-                <th style={{ ...css.th, ...css.thR }}>Buy Qty</th>
-                <th style={{ ...css.th, ...css.thR }}>Unit Price</th>
-                <th style={{ ...css.th, ...css.thR }}>Total</th>
-                <th style={{ ...css.th, ...css.thR }}>Best Deal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.results.map((r, i) => (
-                <Row key={`${r.mpn}-${i}`} r={r} onResolve={handleResolve} />
-              ))}
-            </tbody>
-          </table>
+        <div style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow)" }} className="fade-in">
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+                  {["MPN", "DESCRIPTION", "REQUESTED", "BUY QTY", "UNIT PRICE", "TOTAL", "BEST DEAL"].map((h, i) => (
+                    <th key={h} style={{ padding: "10px 16px", fontSize: 10, fontWeight: 600, letterSpacing: 0.1, textTransform: "uppercase", color: "var(--fg-3)", textAlign: i >= 2 ? "right" : "left", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, idx) => {
+                  const isOOS  = r.error === "Out of stock";
+                  const isNF   = r.error && !isOOS;
+                  const color  = distColor(r.distributor);
+                  const adjQty = r.optimalQty !== r.requestedQty;
+
+                  return (
+                    <tr key={idx} style={{ borderBottom: "1px solid var(--border)", transition: "background 0.1s" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "var(--surface)")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                      {/* MPN */}
+                      <td style={{ padding: "13px 16px", fontFamily: "monospace", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}>
+                        {r.mpn}
+                      </td>
+
+                      {/* Description */}
+                      <td style={{ padding: "13px 16px", color: "var(--fg-3)", fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.description || "—"}
+                      </td>
+
+                      {/* Requested */}
+                      <td style={{ padding: "13px 16px", textAlign: "right", color: "var(--fg-3)" }}>
+                        {r.requestedQty}
+                      </td>
+
+                      {/* Buy Qty */}
+                      <td style={{ padding: "13px 16px", textAlign: "right", fontWeight: 600, color: adjQty ? "var(--amber)" : "var(--fg)", whiteSpace: "nowrap" }}>
+                        {isNF ? "—" : r.optimalQty}
+                        {!isNF && <AdjBadge adj={r.adjustment} saved={r.saved} currency={r.currency} />}
+                      </td>
+
+                      {/* Unit Price */}
+                      <td style={{ padding: "13px 16px", textAlign: "right", color: "var(--fg-2)" }}>
+                        {isNF ? "—" : `${r.currency} ${r.unitPrice.toFixed(4)}`}
+                      </td>
+
+                      {/* Total */}
+                      <td style={{ padding: "13px 16px", textAlign: "right", fontWeight: 700 }}>
+                        {isNF ? "—" : `${r.currency} ${r.totalPrice.toFixed(2)}`}
+                      </td>
+
+                      {/* Best Deal */}
+                      <td style={{ padding: "13px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                        {isNF ? (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--red)", background: "#fef2f2", border: "1px solid #fecaca", padding: "3px 10px", borderRadius: 99 }}>Not found</span>
+                        ) : isOOS ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: "3px 10px", borderRadius: 99 }}>⚠ Out of stock</span>
+                            {r.fallback && (
+                              <button onClick={() => handleResolve(idx)} style={{ fontSize: 11, fontWeight: 600, color: "white", background: "var(--green)", border: "none", padding: "4px 10px", borderRadius: 99, cursor: "pointer" }}>
+                                Resolve ↗
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <a href={r.productUrl} target="_blank" rel="noopener noreferrer"
+                            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color, background: color + "18", border: `1px solid ${color}40`, padding: "4px 12px", borderRadius: 99, textDecoration: "none" }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                            {r.distributor}
+                            <span style={{ fontSize: 10 }}>↗</span>
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Legend + Export */}
-        <div style={css.legend}>
-          {Object.entries(ADJ_META).map(([key, m]) => (
-            <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span style={{
-                fontSize: 9, fontWeight: 700, padding: "1px 5px",
-                border: `1px solid ${m.color}`, color: m.color, letterSpacing: "0.05em",
-              }}>
-                {m.label}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {Object.entries(ADJ_CONFIG).map(([key, c]) => (
+              <span key={key} title={c.title} style={{ fontSize: 9, fontWeight: 700, color: c.color, background: c.bg, border: `1px solid ${c.border}`, padding: "2px 8px", borderRadius: 99, cursor: "help" }}>
+                {c.label}
               </span>
-              {m.desc}
-            </span>
-          ))}
-          <span style={{ marginLeft: "auto" }}>
-            <button
-              style={{
-                fontSize: 10, fontFamily: font, background: "none",
-                border: "1px solid #e5e7eb", padding: "2px 8px",
-                cursor: "pointer", color: "#666",
-              }}
-              onClick={() => {
-                const rows = [
-                  ["MPN", "Requested", "Buy Qty", "Unit Price", "Total", "Distributor", "Link"].join("\t"),
-                  ...data.results.map(r =>
-                    [r.mpn, r.requestedQty, r.optimalQty, r.unitPrice, r.totalPrice, r.distributor, r.productUrl].join("\t")
-                  ),
-                ].join("\n");
-                const a    = document.createElement("a");
-                a.href     = URL.createObjectURL(new Blob([rows], { type: "text/tab-separated-values" }));
-                a.download = `icpaste_${new Date().toISOString().split("T")[0]}.tsv`;
-                a.click();
-              }}
-            >
-              export TSV
-            </button>
-          </span>
+            ))}
+            <span style={{ fontSize: 11, color: "var(--fg-3)" }}>Hover for details</span>
+          </div>
+          <button
+            onClick={() => {
+              const csv = [
+                ["MPN", "Description", "Requested", "Buy Qty", "Unit Price", "Total", "Distributor", "URL"].join(","),
+                ...rows.map(r => [r.mpn, `"${r.description}"`, r.requestedQty, r.optimalQty, r.unitPrice, r.totalPrice, r.distributor, r.productUrl].join(","))
+              ].join("\n");
+              const a = document.createElement("a");
+              a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+              a.download = `icpaste_bom_${new Date().toISOString().split("T")[0]}.csv`;
+              a.click();
+            }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "white", color: "var(--fg-2)", fontSize: 11, fontWeight: 500, border: "1px solid var(--border)", borderRadius: "var(--radius)", cursor: "pointer" }}
+          >
+            ↓ Export CSV
+          </button>
         </div>
 
       </main>
 
-      {/* Footer */}
-      <footer style={css.footer}>
-        <span>© {new Date().getFullYear()} icpaste.com</span>
-        <span>built for hardware buyers</span>
+      {/* ── Footer ── */}
+      <footer style={{ borderTop: "1px solid var(--border)", height: 52, display: "flex", alignItems: "center", padding: "0 24px", marginTop: 24 }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", width: "100%", display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 11, color: "var(--fg-3)" }}>© {new Date().getFullYear()} icpaste.com</span>
+          <span style={{ fontSize: 11, color: "var(--fg-3)" }}>Built for hardware buyers</span>
+        </div>
       </footer>
 
     </div>
@@ -469,7 +343,7 @@ function ResultsContent() {
 
 export default function ResultsPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><p style={{ color: "var(--fg-3)" }}>Loading…</p></div>}>
       <ResultsContent />
     </Suspense>
   );
