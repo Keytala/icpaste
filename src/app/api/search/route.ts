@@ -6,7 +6,7 @@ import type { BomRow, PriceTier, ResultRow, SearchResponse } from "@/lib/types";
 export const runtime = "nodejs";
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  PRICE HELPERS
+//  HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
 function bestPrice(tiers: PriceTier[], qty: number): number {
@@ -21,7 +21,6 @@ function optimize(requestedQty: number, pkgUnit: number, stock: number, tiers: P
   const unit   = Math.max(pkgUnit, 1);
   const pkgQty = Math.ceil(requestedQty / unit) * unit;
 
-  // ── FIX: usa Array invece di Set per compatibilità TypeScript ─────────────
   const candidates: number[] = [requestedQty];
   if (pkgQty !== requestedQty) candidates.push(pkgQty);
   for (const t of tiers) {
@@ -42,151 +41,123 @@ function optimize(requestedQty: number, pkgUnit: number, stock: number, tiers: P
 
   if (!scored.length) {
     const p = bestPrice(tiers, requestedQty);
-    return {
-      qty: requestedQty, unitPrice: p,
-      totalPrice: parseFloat((p * requestedQty).toFixed(2)),
-      feasible: stock >= requestedQty, adjustment: "none" as const, saved: 0,
-    };
+    return { qty: requestedQty, unitPrice: p, totalPrice: parseFloat((p * requestedQty).toFixed(2)), feasible: stock >= requestedQty, adjustment: "none" as const, saved: 0 };
   }
 
   const feasible = scored.filter(c => c.feasible);
   const pool     = (feasible.length ? feasible : scored).sort((a, b) => a.total - b.total);
   const w        = pool[0];
-
   const origTotal = parseFloat((bestPrice(tiers, requestedQty) * requestedQty).toFixed(2));
   const saved     = Math.max(0, parseFloat((origTotal - w.total).toFixed(2)));
   const adj       = w.isPkg && w.isStep ? "both" : w.isPkg ? "package" : w.isStep ? "pricestep" : "none";
 
-  return {
-    qty: w.qty, unitPrice: w.price, totalPrice: w.total,
-    feasible: w.feasible, adjustment: adj as ResultRow["adjustment"], saved,
-  };
+  return { qty: w.qty, unitPrice: w.price, totalPrice: w.total, feasible: w.feasible, adjustment: adj as ResultRow["adjustment"], saved };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  NEXAR (Octopart) — UNA SOLA API PER TUTTI I DISTRIBUTORI
+//  MOUSER
 // ─────────────────────────────────────────────────────────────────────────────
 
-const NEXAR_TOKEN_URL = "https://identity.nexar.com/connect/token";
-const NEXAR_API_URL   = "https://api.nexar.com/graphql/";
-
-const ALLOWED_DISTRIBUTORS = [
-  "Mouser", "Digi-Key", "Farnell", "TME", "RS Components", "Arrow", "Avnet", "LCSC",
-];
-
-const AFFILIATE_PARAMS: Record<string, string> = {
-  "Mouser":        "",
-  "Digi-Key":      "",
-  "Farnell":       "",
-  "TME":           "",
-  "RS Components": "",
-};
-
-let nexarToken: string | null = null;
-let nexarExpiry = 0;
-
-async function getNexarToken(): Promise<string | null> {
-  const id     = process.env.NEXAR_CLIENT_ID;
-  const secret = process.env.NEXAR_CLIENT_SECRET;
-  if (!id || !secret) return null;
-  if (nexarToken && Date.now() < nexarExpiry - 60_000) return nexarToken;
-
-  const res = await fetch(NEXAR_TOKEN_URL, {
-    method:  "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body:    new URLSearchParams({ grant_type: "client_credentials", client_id: id, client_secret: secret }),
-  });
-  if (!res.ok) return null;
-  const json  = await res.json();
-  nexarToken  = json.access_token;
-  nexarExpiry = Date.now() + (json.expires_in ?? 3600) * 1000;
-  return nexarToken;
+async function searchMouser(mpn: string, qty: number): Promise<any[]> {
+  const key = process.env.MOUSER_API_KEY;
+  if (!key || key === "placeholder") return [];
+  try {
+    const res = await fetch(`https://api.mouser.com/api/v1/search/keyword?apiKey=${key}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ SearchByKeywordRequest: { keyword: mpn, records: 10, startingRecord: 0, searchOptions: "2", searchWithYourSignUpLanguage: "false" } }),
+    });
+    if (!res.ok) return [];
+    const json  = await res.json();
+    const parts: any[] = json?.SearchResults?.Parts ?? [];
+    return parts.filter((p: any) => p?.PriceBreaks?.length > 0).map((p: any) => {
+      const tiers: PriceTier[] = (p.PriceBreaks ?? [])
+        .map((pb: any) => ({ qty: Number(pb.Quantity), price: parseFloat(String(pb.Price ?? "0").replace(/[^0-9.]/g, "")) }))
+        .filter((t: PriceTier) => t.qty > 0 && t.price > 0)
+        .sort((a: PriceTier, b: PriceTier) => a.qty - b.qty);
+      const stock = parseInt(String(p.Availability ?? "").replace(/[^0-9]/g, "") || "0", 10);
+      const url   = p.ProductDetailUrl ? `https://www.mouser.com${p.ProductDetailUrl}` : `https://www.mouser.com/Search/Refine?Keyword=${encodeURIComponent(mpn)}`;
+      return { distributor: "Mouser", mpn: String(p.ManufacturerPartNumber ?? mpn), description: String(p.Description ?? ""), stock, packageUnit: Math.max(parseInt(String(p.Mult ?? "1"), 10) || 1, parseInt(String(p.Min ?? "1"), 10) || 1), priceTiers: tiers, productUrl: url, currency: String(p.PriceBreaks?.[0]?.Currency ?? "USD") };
+    });
+  } catch (e) { console.error("[Mouser]", e); return []; }
 }
 
-async function searchNexar(mpn: string, _qty: number): Promise<any[]> {
-  const token = await getNexarToken();
-  if (!token) return [];
+// ─────────────────────────────────────────────────────────────────────────────
+//  DIGI-KEY
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const query = `
-    query SearchMpn($mpn: String!) {
-      supSearchMpn(q: $mpn, limit: 5) {
-        hits {
-          part {
-            mpn
-            shortDescription
-            sellers(authorizedOnly: false) {
-              company { name }
-              offers {
-                inventoryLevel
-                moq
-                packaging
-                prices { quantity price currency }
-                clickUrl
-              }
-            }
-          }
-        }
-      }
-    }
-  `;
-
-  const res = await fetch(NEXAR_API_URL, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-    body:    JSON.stringify({ query, variables: { mpn } }),
-  });
-  if (!res.ok) return [];
-  const json = await res.json();
-  const hits: any[] = json?.data?.supSearchMpn?.hits ?? [];
-  const parts: any[] = [];
-
-  for (const hit of hits) {
-    const part    = hit?.part;
-    const sellers: any[] = part?.sellers ?? [];
-
-    for (const seller of sellers) {
-      const name: string = seller?.company?.name ?? "";
-      if (!ALLOWED_DISTRIBUTORS.some(d => name.toLowerCase().includes(d.toLowerCase()))) continue;
-
-      for (const offer of (seller?.offers ?? [])) {
-        const prices: any[] = offer?.prices ?? [];
-        if (!prices.length) continue;
-
-        const tiers: PriceTier[] = prices
-          .map((p: any) => ({ qty: Number(p.quantity), price: Number(p.price) }))
-          .filter((t: PriceTier) => t.qty > 0 && t.price > 0)
-          .sort((a: PriceTier, b: PriceTier) => a.qty - b.qty);
-
+async function searchDigikey(mpn: string, qty: number): Promise<any[]> {
+  const id     = process.env.DIGIKEY_CLIENT_ID;
+  const secret = process.env.DIGIKEY_CLIENT_SECRET;
+  if (!id || !secret || id === "placeholder") return [];
+  try {
+    const tokenRes = await fetch("https://api.digikey.com/v1/oauth2/token", {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: id, client_secret: secret, grant_type: "client_credentials" }),
+    });
+    if (!tokenRes.ok) return [];
+    const { access_token } = await tokenRes.json();
+    if (!access_token) return [];
+    const searchRes = await fetch("https://api.digikey.com/products/v4/search/keyword", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json", "Authorization": `Bearer ${access_token}`, "X-DIGIKEY-Client-Id": id, "X-DIGIKEY-Locale-Site": process.env.DIGIKEY_LOCALE_SITE ?? "IT", "X-DIGIKEY-Locale-Language": process.env.DIGIKEY_LOCALE_LANGUAGE ?? "it", "X-DIGIKEY-Locale-Currency": process.env.DIGIKEY_LOCALE_CURRENCY ?? "EUR" },
+      body: JSON.stringify({ Keywords: mpn, RecordCount: 10, RecordStartPos: 0, RequestedQuantity: qty, SearchOptions: ["ManufacturerPartSearch"], SortOptions: [{ Field: "UnitPrice", SortOrder: "Ascending" }] }),
+    });
+    if (!searchRes.ok) return [];
+    const json = await searchRes.json();
+    const output: any[] = [];
+    for (const p of (json?.Products ?? [])) {
+      for (const v of (p?.ProductVariations ?? [])) {
+        const pricing: any[] = v?.StandardPricing ?? [];
+        if (!pricing.length) continue;
+        const tiers: PriceTier[] = pricing.map((pb: any) => ({ qty: Number(pb.BreakQuantity), price: Number(pb.UnitPrice) })).filter((t: PriceTier) => t.qty > 0 && t.price > 0).sort((a: PriceTier, b: PriceTier) => a.qty - b.qty);
         if (!tiers.length) continue;
-
-        const stock      = Number(offer?.inventoryLevel ?? 0);
-        const moq        = Number(offer?.moq ?? 1);
-        const pkgUnit    = moq > 1 ? moq : 1;
-        const baseUrl    = String(offer?.clickUrl ?? `https://octopart.com/search?q=${encodeURIComponent(mpn)}`);
-        const affParam   = AFFILIATE_PARAMS[name] ?? "";
-        const productUrl = affParam ? `${baseUrl}${affParam}` : baseUrl;
-
-        parts.push({
-          distributor: name,
-          mpn:         String(part?.mpn ?? mpn),
-          description: String(part?.shortDescription ?? ""),
-          stock, packageUnit: pkgUnit, priceTiers: tiers, productUrl,
-          currency: String(prices[0]?.currency ?? "USD"),
-        });
+        const stock   = Number(v.QuantityAvailableforPackageType ?? p.QuantityAvailable ?? 0);
+        const stdPkg  = Number(v.StandardPackage ?? 0);
+        const moq     = Number(v.MinimumOrderQuantity ?? 1);
+        const pkgUnit = stdPkg > 1 ? stdPkg : (moq > 0 ? moq : 1);
+        output.push({ distributor: "Digi-Key", mpn: String(p.ManufacturerProductNumber ?? mpn), description: String(p.Description?.ProductDescription ?? ""), stock, packageUnit: pkgUnit, priceTiers: tiers, productUrl: String(p.ProductUrl ?? `https://www.digikey.it/products/it?keywords=${encodeURIComponent(mpn)}`), currency: String(p.Currency ?? "EUR") });
       }
     }
-  }
-  return parts;
+    return output;
+  } catch (e) { console.error("[DigiKey]", e); return []; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  AGGIUNGI ALTRI DISTRIBUTORI QUI
-//  async function searchTME(mpn: string, qty: number): Promise<any[]> { ... }
+//  FARNELL
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function searchFarnell(mpn: string, _qty: number): Promise<any[]> {
+  const key = process.env.FARNELL_API_KEY;
+  if (!key || key === "placeholder") return [];
+  try {
+    const store  = process.env.FARNELL_STORE ?? "it.farnell.com";
+    const params = new URLSearchParams({ "term": `manuPartNum:${mpn}`, "storeInfo.id": store, "storeInfo.type": "global", "storeInfo.locale": "it_IT", "resultsSettings.offset": "0", "resultsSettings.numberOfResults": "10", "resultsSettings.sortBy": "unitPrice", "resultsSettings.sortOrder": "asc", "callInfo.responseDataFormat": "json", "userinfo.apiKey": key });
+    const res = await fetch(`https://api.element14.com/catalog/products?${params}`, { headers: { "Accept": "application/json" } });
+    if (!res.ok) return [];
+    const json     = await res.json();
+    const products: any[] = json?.manufacturerPartNumberSearchReturn?.products ?? json?.keywordSearchReturn?.products ?? [];
+    return products.filter((p: any) => p?.prices?.length > 0).map((p: any) => {
+      const tiers: PriceTier[] = (p.prices ?? []).map((pb: any) => ({ qty: Number(pb.from), price: Number(pb.cost) })).filter((t: PriceTier) => t.qty > 0 && t.price > 0).sort((a: PriceTier, b: PriceTier) => a.qty - b.qty);
+      const url = p.productURL ? `https://${store}${p.productURL}` : `https://${store}/search?st=${encodeURIComponent(p.sku ?? mpn)}`;
+      return { distributor: "Farnell", mpn: String(p.translatedManufacturerPartNumberList?.[0]?.manufacturerPartNumber ?? mpn), description: String(p.displayName ?? ""), stock: Number(p.stock?.level ?? 0), packageUnit: Number(p.packSize ?? 1) > 1 ? Number(p.packSize) : Number(p.minimumOrderQty ?? 1), priceTiers: tiers, productUrl: url, currency: String(p.currency ?? "EUR") };
+    });
+  } catch (e) { console.error("[Farnell]", e); return []; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  REGISTRY — per aggiungere un distributore:
+//  1. Scrivi la funzione searchXXX sopra
+//  2. Aggiungila all'array SOURCES
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SOURCES = [
-  searchNexar,
+  searchMouser,
+  searchDigikey,
+  searchFarnell,
   // searchTME,
+  // searchRS,
+  // searchLCSC,
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -196,7 +167,6 @@ const SOURCES = [
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-
     let bom: BomRow[] = [];
     if (Array.isArray(body.bom))           bom = body.bom;
     else if (typeof body.raw === "string") bom = parseBom(body.raw);
@@ -207,9 +177,7 @@ export async function POST(req: NextRequest) {
     const results: ResultRow[] = await Promise.all(
       bom.map(async ({ mpn, qty }): Promise<ResultRow> => {
 
-        const allParts = (await Promise.all(
-          SOURCES.map(fn => fn(mpn, qty).catch(() => []))
-        )).flat();
+        const allParts = (await Promise.all(SOURCES.map(fn => fn(mpn, qty).catch(() => [])))).flat();
 
         const noResult = (error: string): ResultRow => ({
           mpn, description: "", requestedQty: qty, optimalQty: qty,
@@ -230,19 +198,11 @@ export async function POST(req: NextRequest) {
         if (withStock.length) {
           withStock.sort((a, b) => a.totalPrice - b.totalPrice);
           const w = withStock[0];
-          return {
-            mpn: w.mpn, description: w.description, requestedQty: qty,
-            optimalQty: w.qty, unitPrice: w.unitPrice, totalPrice: w.totalPrice,
-            currency: w.currency, distributor: w.distributor, stock: w.stock,
-            productUrl: w.productUrl, adjustment: w.adjustment, saved: w.saved,
-          };
+          return { mpn: w.mpn, description: w.description, requestedQty: qty, optimalQty: w.qty, unitPrice: w.unitPrice, totalPrice: w.totalPrice, currency: w.currency, distributor: w.distributor, stock: w.stock, productUrl: w.productUrl, adjustment: w.adjustment, saved: w.saved };
         }
 
-        const noStock  = [...optimized].sort((a, b) => a.totalPrice - b.totalPrice);
-        const cheapest = noStock[0];
-
-        const fallback = allParts
-          .filter(p => p.stock > 0)
+        const cheapest = [...optimized].sort((a, b) => a.totalPrice - b.totalPrice)[0];
+        const fallback = allParts.filter(p => p.stock > 0)
           .map(p => ({ ...p, ...optimize(Math.min(qty, p.stock), p.packageUnit, p.stock, p.priceTiers) }))
           .filter(p => p.unitPrice > 0)
           .sort((a, b) => a.totalPrice - b.totalPrice)[0];
@@ -253,18 +213,13 @@ export async function POST(req: NextRequest) {
           currency: cheapest.currency, distributor: cheapest.distributor, stock: cheapest.stock,
           productUrl: cheapest.productUrl, adjustment: cheapest.adjustment, saved: cheapest.saved,
           error: "Out of stock",
-          fallback: fallback ? {
-            distributor: fallback.distributor, optimalQty: fallback.qty,
-            unitPrice: fallback.unitPrice, totalPrice: fallback.totalPrice,
-            stock: fallback.stock, productUrl: fallback.productUrl, currency: fallback.currency,
-          } : undefined,
+          fallback: fallback ? { distributor: fallback.distributor, optimalQty: fallback.qty, unitPrice: fallback.unitPrice, totalPrice: fallback.totalPrice, stock: fallback.stock, productUrl: fallback.productUrl, currency: fallback.currency } : undefined,
         };
       })
     );
 
     const totalBom = parseFloat(results.reduce((s, r) => s + (r.totalPrice ?? 0), 0).toFixed(2));
-    const response: SearchResponse = { results, totalBom, searchedAt: new Date().toISOString() };
-    return NextResponse.json(response);
+    return NextResponse.json({ results, totalBom, searchedAt: new Date().toISOString() } as SearchResponse);
 
   } catch (err) {
     console.error("[Search]", err);
