@@ -1,12 +1,18 @@
-export interface BomRow {
-  mpn: string;
-  qty: number;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+//  icpaste.com — Shared Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface PriceTier {
   qty:   number;
   price: number;
 }
+
+export interface BomRow {
+  mpn: string;
+  qty: number;
+}
+
+export type Adjustment = "none" | "package" | "pricestep" | "both";
 
 export interface ResultRow {
   mpn:          string;
@@ -19,7 +25,7 @@ export interface ResultRow {
   distributor:  string;
   stock:        number;
   productUrl:   string;
-  adjustment:   "none" | "package" | "pricestep" | "both";
+  adjustment:   Adjustment;
   saved:        number;
   error?:       string;
   fallback?: {
