@@ -1,172 +1,175 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { parseBom }  from "@/lib/bom-parser";
+import { useState, useCallback } from "react";
+import { useRouter }             from "next/navigation";
+
+const DISTRIBUTORS = ["Mouser", "Digi-Key", "Farnell"];
 
 const PLACEHOLDER = `LM358N 100
 BC547B 500
-GRM188R71C104KA01D 6800
+GRM188R71C104KA01D 2700
 STM32F103C8T6 10
 NE555P 250`;
 
-const FEATURES = [
-  { icon: "⚡", title: "Instant results",  desc: "Search across all major distributors simultaneously" },
-  { icon: "📦", title: "Qty optimized",    desc: "Package units and price breaks calculated automatically" },
-  { icon: "💰", title: "Best price",       desc: "Always shows the cheapest option with stock available" },
-];
-
 export default function HomePage() {
   const router  = useRouter();
-  const [input, setInput]     = useState("");
-  const [error, setError]     = useState("");
+  const [input,   setInput]   = useState("");
+  const [error,   setError]   = useState("");
   const [loading, setLoading] = useState(false);
-  const taRef = useRef<HTMLTextAreaElement>(null);
 
-  const lineCount = input.split("\n").filter(l => l.trim()).length;
+  const lines     = input.split("\n");
+  const lineCount = lines.filter(l => l.trim()).length;
 
   const handleSearch = useCallback(() => {
     setError("");
-    const bom = parseBom(input);
-    if (!bom.length) {
-      setError("No valid components found. Format: MPN QUANTITY — one per line.");
+    const rows = input.split("\n")
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith("#"))
+      .map(line => {
+        const parts = line.split(/[\t,;\s]+/);
+        const mpn   = parts[0]?.toUpperCase().trim();
+        const qty   = parseInt(parts[1]?.replace(/\D/g, "") ?? "0", 10);
+        return mpn && qty > 0 ? { mpn, qty } : null;
+      })
+      .filter(Boolean);
+
+    if (!rows.length) {
+      setError("No valid components found. Format: MPN QTY (one per line)");
       return;
     }
     setLoading(true);
-    router.push(`/results?bom=${btoa(JSON.stringify(bom))}`);
+    const encoded = btoa(JSON.stringify(rows));
+    router.push(`/results?bom=${encoded}`);
   }, [input, router]);
 
-  const handleKey = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSearch();
     }
-  }, [handleSearch]);
+  }
+
+  const displayLines = (input || PLACEHOLDER).split("\n").slice(0, 100);
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--bg)" }}>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "var(--bg)" }}>
 
       {/* ── Header ── */}
-      <header style={{ borderBottom: "1px solid var(--border)", padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: -0.3 }}>icpaste</span>
-          <span style={{ fontSize: 10, fontWeight: 600, background: "var(--fg)", color: "var(--brand-fg)", padding: "1px 6px", borderRadius: 4, letterSpacing: 0.5 }}>BETA</span>
+      <header style={{ borderBottom: "1px solid var(--border)", height: 48, display: "flex", alignItems: "center", padding: "0 24px", justifyContent: "space-between", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontFamily: "var(--font)", fontWeight: 600, fontSize: 15, letterSpacing: -0.5, color: "var(--fg)" }}>
+            ic<span style={{ color: "var(--brand)" }}>paste</span>
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "var(--fg-3)", fontFamily: "var(--font)", border: "1px solid var(--border)", padding: "1px 6px", borderRadius: 2 }}>
+            BETA
+          </span>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
-          {["Mouser", "Digi-Key", "Farnell", "TME"].map(d => (
-            <span key={d} style={{ fontSize: 11, color: "var(--fg-2)", background: "var(--surface)", border: "1px solid var(--border)", padding: "3px 8px", borderRadius: 99 }}>{d}</span>
+          {DISTRIBUTORS.map(d => (
+            <span key={d} style={{ fontSize: 11, color: "var(--fg-2)", fontFamily: "var(--font)", padding: "2px 8px", border: "1px solid var(--border)", borderRadius: 2 }}>
+              {d}
+            </span>
           ))}
         </div>
       </header>
 
       {/* ── Main ── */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 24px" }}>
-        <div style={{ width: "100%", maxWidth: 720 }}>
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px", overflow: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 760 }}>
 
           {/* Headline */}
-          <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <h1 style={{ fontSize: 38, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.15, marginBottom: 12 }}>
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <h1 style={{ fontFamily: "var(--font)", fontSize: 28, fontWeight: 600, letterSpacing: -1, color: "var(--fg)", marginBottom: 10, lineHeight: 1.2 }}>
               Find the best price<br />
-              <span style={{ color: "var(--fg-2)" }}>for every component.</span>
+              <span style={{ color: "var(--brand)" }}>for every component.</span>
             </h1>
-            <p style={{ fontSize: 15, color: "var(--fg-2)", lineHeight: 1.6, maxWidth: 480, margin: "0 auto" }}>
-              Paste your BOM below. We search all major distributors simultaneously and return only the best deal — stock included.
+            <p style={{ fontSize: 14, color: "var(--fg-2)", lineHeight: 1.6, fontFamily: "var(--sans)", maxWidth: 480, margin: "0 auto" }}>
+              Paste your BOM below. We search {DISTRIBUTORS.join(", ")} simultaneously
+              and return only the best deal — stock included.
             </p>
           </div>
 
           {/* Input box */}
-          <div style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow)", background: "var(--bg)" }}>
+          <div style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
 
             {/* Top bar */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.08, textTransform: "uppercase", color: "var(--fg-3)" }}>BOM Input</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 14px", background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "var(--fg-3)", fontFamily: "var(--font)" }}>
+                BOM INPUT
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 {lineCount > 0 && (
-                  <span style={{ fontSize: 10, fontWeight: 600, color: "var(--fg)", background: "var(--border)", padding: "1px 8px", borderRadius: 99 }}>
-                    {lineCount} {lineCount === 1 ? "component" : "components"}
+                  <span style={{ fontSize: 10, fontWeight: 600, color: "var(--brand)", fontFamily: "var(--font)" }}>
+                    {lineCount} {lineCount === 1 ? "row" : "rows"}
                   </span>
                 )}
-                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.08, textTransform: "uppercase", color: "var(--fg-3)" }}>MPN · QTY · one per line</span>
+                <span style={{ fontSize: 10, letterSpacing: 1, color: "var(--fg-3)", fontFamily: "var(--font)" }}>
+                  MPN · QTY · ONE PER LINE
+                </span>
               </div>
             </div>
 
-            {/* Textarea */}
-            <textarea
-              ref={taRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder={PLACEHOLDER}
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              style={{
-                width: "100%", minHeight: 260, padding: "14px 16px",
-                fontSize: 13, lineHeight: "22px", fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                background: "var(--bg)", color: "var(--fg)", border: "none", outline: "none", resize: "none",
-                display: "block",
-              }}
-            />
+            {/* Body */}
+            <div style={{ display: "flex", minHeight: 260 }}>
+              {/* Line numbers */}
+              <div style={{ width: 40, flexShrink: 0, background: "var(--surface)", borderRight: "1px solid var(--border)", padding: "12px 0", userSelect: "none" }}>
+                {displayLines.map((_, i) => (
+                  <div key={i} style={{ fontFamily: "var(--font)", fontSize: 11, lineHeight: "22px", color: "var(--fg-3)", textAlign: "center" }}>
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
+              {/* Textarea */}
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={PLACEHOLDER}
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                style={{ flex: 1, background: "var(--bg)", border: "none", outline: "none", resize: "none", padding: "12px 16px", fontFamily: "var(--font)", fontSize: 13, lineHeight: "22px", color: "var(--fg)", minHeight: 260, caretColor: "var(--brand)" }}
+              />
+            </div>
 
             {/* Bottom bar */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", background: "var(--surface)", borderTop: "1px solid var(--border)", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: "var(--fg-3)", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font)", flexWrap: "wrap" }}>
                 <span>CSV, tab or space separated</span>
                 <span>Max 1000 rows</span>
-                <span>
-                  <kbd style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 5px", fontSize: 10, color: "var(--fg-2)" }}>⌘ Enter</kbd>
-                  {" "}to search
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <kbd style={{ background: "white", border: "1px solid var(--border-2)", borderRadius: 2, padding: "0 4px", fontSize: 10 }}>⌘ Enter</kbd>
+                  <span>to search</span>
                 </span>
               </div>
               <button
                 onClick={handleSearch}
                 disabled={loading || !input.trim()}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "7px 18px", background: loading || !input.trim() ? "var(--border)" : "var(--brand)",
-                  color: loading || !input.trim() ? "var(--fg-3)" : "var(--brand-fg)",
-                  fontSize: 13, fontWeight: 600, border: "none", borderRadius: "var(--radius)",
-                  cursor: loading || !input.trim() ? "not-allowed" : "pointer",
-                  transition: "all 0.15s", whiteSpace: "nowrap",
-                }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 18px", background: loading || !input.trim() ? "var(--border)" : "var(--brand)", color: loading || !input.trim() ? "var(--fg-3)" : "var(--brand-fg)", border: "none", borderRadius: "var(--radius)", cursor: loading || !input.trim() ? "not-allowed" : "pointer", fontFamily: "var(--font)", fontSize: 12, fontWeight: 600, letterSpacing: 0.5, transition: "all 0.15s", whiteSpace: "nowrap" }}
               >
-                {loading ? (
-                  <>
-                    <span style={{ width: 13, height: 13, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.6s linear infinite", display: "inline-block" }} />
-                    Searching…
-                  </>
-                ) : "Find best prices →"}
+                {loading ? "Searching…" : "Find best prices →"}
               </button>
             </div>
           </div>
 
           {/* Error */}
           {error && (
-            <p style={{ marginTop: 8, fontSize: 12, color: "var(--red)", padding: "0 2px" }}>{error}</p>
+            <p style={{ marginTop: 8, fontSize: 12, color: "var(--red)", fontFamily: "var(--font)" }}>
+              {error}
+            </p>
           )}
 
           {/* Format hints */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 10 }}>
             {[
-              { label: "MPN + Quantity",   example: "LM358N 100",     note: "space separated" },
-              { label: "Distributor code", example: "512-LM358N 100", note: "auto-resolved to MPN" },
-              { label: "CSV / tab format", example: "LM358N,100",     note: "comma or tab" },
+              { label: "MPN + QUANTITY",    example: "LM358N 100",     note: "space separated" },
+              { label: "DISTRIBUTOR CODE",  example: "512-LM358N 100", note: "auto-resolved to MPN" },
+              { label: "CSV / TAB FORMAT",  example: "LM358N,100",     note: "comma or tab" },
             ].map(h => (
               <div key={h.label} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 12px" }}>
-                <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.08, textTransform: "uppercase", color: "var(--fg-3)", marginBottom: 4 }}>{h.label}</div>
-                <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--fg)", marginBottom: 2 }}>{h.example}</div>
-                <div style={{ fontSize: 10, color: "var(--fg-3)" }}>{h.note}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Features */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 24 }}>
-            {FEATURES.map(f => (
-              <div key={f.title} style={{ padding: "12px 14px" }}>
-                <div style={{ fontSize: 18, marginBottom: 6 }}>{f.icon}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 3 }}>{f.title}</div>
-                <div style={{ fontSize: 11, color: "var(--fg-3)", lineHeight: 1.5 }}>{f.desc}</div>
+                <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, color: "var(--fg-3)", fontFamily: "var(--font)", marginBottom: 4 }}>{h.label}</div>
+                <div style={{ fontSize: 12, fontFamily: "var(--font)", color: "var(--fg)", marginBottom: 2 }}>{h.example}</div>
+                <div style={{ fontSize: 10, color: "var(--fg-3)", fontFamily: "var(--sans)" }}>{h.note}</div>
               </div>
             ))}
           </div>
@@ -175,11 +178,9 @@ export default function HomePage() {
       </main>
 
       {/* ── Footer ── */}
-      <footer style={{ borderTop: "1px solid var(--border)", height: 52, display: "flex", alignItems: "center", padding: "0 24px" }}>
-        <div style={{ maxWidth: 720, margin: "0 auto", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: "var(--fg-3)" }}>© {new Date().getFullYear()} icpaste.com</span>
-          <span style={{ fontSize: 11, color: "var(--fg-3)" }}>Built for hardware buyers</span>
-        </div>
+      <footer style={{ borderTop: "1px solid var(--border)", height: 48, display: "flex", alignItems: "center", padding: "0 24px", justifyContent: "space-between", flexShrink: 0 }}>
+        <span style={{ fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font)" }}>© {new Date().getFullYear()} icpaste.com</span>
+        <span style={{ fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font)" }}>Built for hardware buyers</span>
       </footer>
 
     </div>
