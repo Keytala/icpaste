@@ -1,55 +1,46 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:       #ffffff;
-  --surface:  #f8f9fa;
-  --border:   #e9ecef;
-  --border-2: #dee2e6;
-  --fg:       #212529;
-  --fg-2:     #6c757d;
-  --fg-3:     #adb5bd;
-  --brand:    #0066cc;
-  --brand-fg: #ffffff;
-  --green:    #198754;
-  --red:      #dc3545;
-  --amber:    #fd7e14;
-  --violet:   #6f42c1;
-  --font:     'JetBrains Mono', 'Courier New', monospace;
-  --sans:     'Inter', system-ui, sans-serif;
-  --radius:   4px;
-  --radius-lg: 6px;
+  --font:    'JetBrains Mono', 'Courier New', monospace;
+  --bg:      #ffffff;
+  --surface: #f7f7f7;
+  --border:  #e4e4e4;
+  --fg:      #111111;
+  --fg-2:    #555555;
+  --fg-3:    #999999;
+  --brand:   #111111;
+  --brand-fg:#ffffff;
+  --green:   #16a34a;
+  --red:     #dc2626;
+  --amber:   #d97706;
+  --radius:  4px;
+  --max-w:   860px;
 }
 
-html {
-  font-family: var(--sans);
-  font-size: 14px;
-  -webkit-font-smoothing: antialiased;
-}
+html { font-family: var(--font); font-size: 13px; }
 
 body {
   background: var(--bg);
   color: var(--fg);
+  -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
 
-::selection { background: #cce5ff; color: #004085; }
+a { color: inherit; text-decoration: none; }
+
+::selection { background: #111; color: #fff; }
 
 ::-webkit-scrollbar       { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: #ddd; border-radius: 99px; }
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes spin { to { transform: rotate(360deg); } }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 
 .fade-up { animation: fadeUp 0.2s ease forwards; }
