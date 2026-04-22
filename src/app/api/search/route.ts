@@ -188,7 +188,9 @@ async function searchNexar(mpn: string, qty: number): Promise<any[]> {
       }
     }
 
-    console.log(`[Nexar] ${mpn} → ${parts.length} offers from ${[...new Set(parts.map((p: any) => p.distributor))].length} sellers`);
+    const uniqueSellers = parts.map((p: any) => p.distributor).filter((d: string, i: number, arr: string[]) => arr.indexOf(d) === i);
+
+    console.log(`[Nexar] ${mpn} → ${parts.length} offers from ${uniqueSellers.length} sellers`);
     return parts;
 
   } catch (e) {
